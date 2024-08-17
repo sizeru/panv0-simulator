@@ -20,6 +20,7 @@ enum instruction {
 	JUMP
 };
 
+
 struct ExecStackLine {
 	enum instruction instr;
 	void* data;
@@ -104,10 +105,6 @@ int main(int argc, char* argv[]) {
 			
 
 		}
-		uint64_t instr = buffer[cur]
-		
+		uint64_t instr = buffer[cursor];
 	}
 }
-
-// Count tra
-cto()
