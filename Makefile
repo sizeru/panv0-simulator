@@ -1,6 +1,6 @@
 EXEC = panv0
-CC = gcc
+CC = g++
 SRC = simulator.cpp
 
-$(EXEC):
+$(EXEC): $(SRC)
 	$(CC) -o $(EXEC) $(SRC)
