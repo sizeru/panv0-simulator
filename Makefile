@@ -1,15 +1,20 @@
 EXEC = panv0
 CFLAGS = -std=c++11
 CC = g++
-SRC = simulator.cpp
+SRC = src/simulator.cpp src/stack.cpp src/data.cpp src/instruction.cpp
 
-$(EXEC): $(SRC)
-	$(CC) $(CFLAGS) -o $(EXEC) $(SRC)
+OBJ = $(SRC:.cpp=.o)
+
+$(EXEC): $(OBJ)
+	$(CC) $(CFLAGS) -o $(EXEC) $(OBJ)
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
 
 debug: CFLAGS += -g3
 debug: $(EXEC)
 
 clean:
-	rm $(EXEC)
+	rm -f $(EXEC) $(OBJ)
 
 .PHONY: debug clean
