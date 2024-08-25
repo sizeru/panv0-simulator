@@ -1,5 +1,5 @@
 EXEC = panv0
-CFLAGS =
+CFLAGS = -std=c++11
 CC = g++
 SRC = simulator.cpp
 
