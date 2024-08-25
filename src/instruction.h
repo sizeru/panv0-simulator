@@ -18,8 +18,8 @@ enum Operation {
 };
 
 struct Instruction {
-	Operation op;
 	u32 len;
+	Operation op;
 	Data data;
 };
 

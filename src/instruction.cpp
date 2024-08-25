@@ -4,7 +4,7 @@
 
 // For debugging purposes
 void printbits(unsigned char byte) {
-    printf("\tbyte: ");
+    printf("byte: ");
     for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
     printf("_");
     for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
@@ -55,9 +55,13 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 			op = (Operation)bfe(*(u8*)instr, 1, opLen);
 			return;
 		case 2:
+			opLen = 4; // Double check this
+			break;
 		case 3:
+			opLen = 8; // Double check this
+			break;
 		case 4:
-			opLen = 2 * instrLen;
+			opLen = 8; // Double check this
 			break;
 		default:
 			opLen = 2 * (4 + instrLen / 4);
@@ -67,8 +71,7 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 	if (opLen > 8) {
 		// Unsupported
 		op = OP__MAX;
-		return;
-	}
+		return; }
 
 	op = (Operation)bfe(*(u64 *)instr, suffixLen, opLen);
 	return;
@@ -77,7 +80,7 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 Instruction getInstr(void *instrPos) {
 	u32 instrLen, h;
 	getInstrLen(instrPos, instrLen, h);
-	u32 suffixLen = 2 * h;
+	u32 suffixLen = h == 1 ? h : 2 * h; // If h == 1 then special case
 	Operation op;
 	u32 opLen;
 	getOp(op, opLen, instrPos, instrLen, suffixLen);
@@ -106,15 +109,17 @@ Instruction getInstr(void *instrPos) {
 		default:
 			break;
 	}
-	printf("Instr: len: %u, op: %u, data: %lu\n", instrLen,  op, data.contents.val);
-	return Instruction{op, instrLen, data};
+	printf("Instr: len: %u, op: %u, data: %ld\n", instrLen, op, data.contents.val);
+	return Instruction{instrLen, op, data};
 }
 
 // Returns true if the instruction was able to be run. False otherwise.
 bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]) {
+    printf("WHAT THE HECK, runInstr\n");
 	if (instr.op < 6) {
-		return execStack.push(instr.data);
+		return execStack.push(instr.data); // causing segfault
 	}
+    printf("WHAT THE HECK, runInstr\n");
 	switch (instr.op) {
 		case OP_ADD: {
 			Data resultLen = instr.data;

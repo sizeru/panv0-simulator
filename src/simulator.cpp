@@ -77,8 +77,11 @@ int main(int argc, char *argv[]) {
 			// Get different instruction fields
 			u8* instrPos = buffer + cursor;
 			// printf("Read Instr with starting byte: 0x%02x\n", *instrPos);
+            printf("HERE1\n");
 			Instruction instr = getInstr(instrPos);
+            printf("HERE2\n");
 			runInstr(instr, execStack, spmStack, memory);
+            printf("HERE3\n");
 			cursor += instr.len;
 		}
 	}
