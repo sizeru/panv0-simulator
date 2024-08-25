@@ -1,4 +1,5 @@
 #include "data.h"
+#include "instruction.h"
 #include <cstring>
 #include <stdio.h>
 
@@ -29,6 +30,8 @@ Data::Data(void *instr, u32 suffixLen, u32 opLen, u32 instrLen) {
 
 	// Copy data
 	dataLen = (dataLen+7) / 8;
+    printf("dataLen (bytes): %d\n", dataLen);
+
 	u8* dataPos = (u8*)instr + (suffixLen+opLen)/8;
 	u8 dataOffset = (suffixLen + opLen) % 8;
 

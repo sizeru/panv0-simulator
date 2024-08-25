@@ -1,6 +1,7 @@
 #include "stack.h"
 
 #include <cstring>
+#include <stdio.h>
 
 Stack::Stack(u32 bufferSize, u8* memory)
 	: buffer(new u8[bufferSize]), capacity(bufferSize), memory(memory),
@@ -34,10 +35,11 @@ bool Stack::push(void* data, u32 length, DataFlags dataFlags) {
 
 // Push a Data to the stack
 bool Stack::push(Data data) {
+    printf("data.length: %d\n", data.length);
 	if (data.length > 8) {
-		return this->push(&data.contents.val, data.length, data.flags);
-	} else {
 		return this->push(data.contents.ptr, data.length, data.flags);
+	} else {
+		return this->push(&data.contents.val, data.length, data.flags); // This was previously flipped. Bug
 	}
 }
 

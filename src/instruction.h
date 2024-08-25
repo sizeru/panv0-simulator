@@ -26,4 +26,7 @@ struct Instruction {
 Instruction getInstr(void *instrPos);
 bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]);
 
+// For debugging purposes
+void printbits(unsigned char byte);
+
 #endif // INSTRUCTION_H
