@@ -2,17 +2,28 @@
 #include "instruction.h"
 #include "data.h"
 
+// For debugging purposes
+void printbits(unsigned char byte) {
+    printf("\tbyte: ");
+    for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
+    printf("_");
+    for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
+    printf("\n");
+}
+
 // Count trailing ones of an arbitrary data type
 u16 cto(void *insn) {
 	u16 ones_count = 0;
 	while (1) {
 		u8 byte = *(u8 *)insn;
+        printbits(byte);
 		for (int i = 0; i < 8; i++) {
 			if (!(byte & (1 << i))) {
 				return ones_count;
 			}
+            ones_count++;
 		}
-		insn = (char *)insn + 1;
+		insn = (u8 *)insn + 1;
 	}
 }
 
@@ -95,7 +106,7 @@ Instruction getInstr(void *instrPos) {
 		default:
 			break;
 	}
-	printf("Instr: op: %u, len: %u, data: %lu\n", op, instrLen, data.contents.val);
+	printf("Instr: len: %u, op: %u, data: %lu\n", instrLen,  op, data.contents.val);
 	return Instruction{op, instrLen, data};
 }
 
