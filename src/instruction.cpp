@@ -123,7 +123,7 @@ Instruction getInstr(void *instrPos) {
 // Returns true if the instruction was able to be run. False otherwise.
 bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]) {
 	if (instr.op < 6) {
-		return execStack.push(instr.data); // causing segfault
+		return execStack.push(instr.data);
 	}
 	switch (instr.op) {
 		case OP_ADD: {
