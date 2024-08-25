@@ -6,10 +6,10 @@ SRC = src/simulator.cpp src/stack.cpp src/data.cpp src/instruction.cpp
 OBJ = $(SRC:.cpp=.o)
 
 $(EXEC): $(OBJ)
-	$(CC) $(CFLAGS) -o $(EXEC) $(OBJ)
+	$(CC) $(CFLAGS) -o $(EXEC) $(OBJ) -I include
 
 %.o: %.cpp
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ -I include
 
 debug: CFLAGS += -g3
 debug: $(EXEC)
