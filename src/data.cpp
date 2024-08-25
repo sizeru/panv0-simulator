@@ -8,7 +8,7 @@ Data::Data() : length(0), flags(0) {}
 // Extracts the data (excluding flags) from an instruction
 Data::Data(void *instr, u32 suffixLen, u32 opLen, u32 instrLen) {
 	u32 dataLen = (instrLen * 8) - opLen - suffixLen; // length in bits
-    printf("instrLen: %d, opLen: %d, suffixLen: %d\n", instrLen * 8, opLen, suffixLen);
+    printf("\tinstrLen: %d, opLen: %d, suffixLen: %d\n", instrLen * 8, opLen, suffixLen);
 	// Ensure dataLen is always a multiple of 2 and is stored in bytes
 	u32 rounded = dataLen;
 	rounded |= rounded >> 1;
@@ -30,7 +30,7 @@ Data::Data(void *instr, u32 suffixLen, u32 opLen, u32 instrLen) {
 
 	// Copy data
 	dataLen = (dataLen+7) / 8;
-    printf("dataLen (bytes): %d\n", dataLen);
+    printf("\tdataLen (bytes): %d\n", dataLen);
 
 	u8* dataPos = (u8*)instr + (suffixLen+opLen)/8;
 	u8 dataOffset = (suffixLen + opLen) % 8;

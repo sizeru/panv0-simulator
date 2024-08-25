@@ -35,7 +35,6 @@ bool Stack::push(void* data, u32 length, DataFlags dataFlags) {
 
 // Push a Data to the stack
 bool Stack::push(Data data) {
-    printf("data.length: %d\n", data.length);
 	if (data.length > 8) {
 		return this->push(data.contents.ptr, data.length, data.flags);
 	} else {

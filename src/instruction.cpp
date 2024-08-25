@@ -4,7 +4,7 @@
 
 // For debugging purposes
 void printbits(unsigned char byte) {
-    printf("byte: ");
+    printf("\tbyte: ");
     for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
     printf("_");
     for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
@@ -109,17 +109,15 @@ Instruction getInstr(void *instrPos) {
 		default:
 			break;
 	}
-	printf("Instr: len: %u, op: %u, data: %ld\n", instrLen, op, data.contents.val);
+	printf("\tInstr: len: %u, op: %u, data: %ld\n", instrLen, op, data.contents.val);
 	return Instruction{instrLen, op, data};
 }
 
 // Returns true if the instruction was able to be run. False otherwise.
 bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]) {
-    printf("WHAT THE HECK, runInstr\n");
 	if (instr.op < 6) {
 		return execStack.push(instr.data); // causing segfault
 	}
-    printf("WHAT THE HECK, runInstr\n");
 	switch (instr.op) {
 		case OP_ADD: {
 			Data resultLen = instr.data;
@@ -127,7 +125,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
 			Data shift = execStack.get(3);
-			printf("ADD: resLen: %lu, dst: %lu, op1: %lu, op2: %lu, shift: %lu\n",
+			printf("\tADD: resLen: %lu, dst: %lu, op1: %lu, op2: %lu, shift: %lu\n",
 				resultLen.contents.val, dst.contents.val, op1.contents.val, op2.contents.val, shift.contents.val
 			);
 			break;
@@ -137,7 +135,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data target = execStack.get(0); // where to jump to
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
-			printf("ADD: cond: %lu, dst: %li, op1: %li, op2: %lu\n",
+			printf("\tADD: cond: %lu, dst: %li, op1: %li, op2: %lu\n",
 				condCode.contents.val, target.contents.val, op1.contents.val, op2.contents.val
 			);
 			break;
@@ -148,7 +146,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
 			Data shift = execStack.get(3);
-			printf("ADD: jumpOffset: %li, dst: %li, op1: %li, op2: %lu\n",
+			printf("\tADD: jumpOffset: %li, dst: %li, op1: %li, op2: %lu\n",
 				offset.contents.val, dst.contents.val, op1.contents.val, op2.contents.val
 			);
 		}
