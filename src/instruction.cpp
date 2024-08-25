@@ -3,11 +3,17 @@
 #include "data.h"
 
 // For debugging purposes
-void printbits(unsigned char byte) {
-    printf("\tbyte: ");
-    for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
-    printf("_");
-    for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
+void printbits(void *insn, unsigned char len) {
+    printf("\tbits: ");
+	insn = (u8 *)insn + len-1;
+    for (int i = len-1; i >= 0; i--) {
+		u8 byte = *(u8 *)insn;
+        for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
+        printf("_");
+        for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
+        printf(" ");
+	    insn = (u8 *)insn - 1;
+    }
     printf("\n");
 }
 
@@ -16,7 +22,6 @@ u16 cto(void *insn) {
 	u16 ones_count = 0;
 	while (1) {
 		u8 byte = *(u8 *)insn;
-        printbits(byte);
 		for (int i = 0; i < 8; i++) {
 			if (!(byte & (1 << i))) {
 				return ones_count;
@@ -80,6 +85,8 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 Instruction getInstr(void *instrPos) {
 	u32 instrLen, h;
 	getInstrLen(instrPos, instrLen, h);
+
+    printbits(instrPos, instrLen);
 	u32 suffixLen = h == 1 ? h : 2 * h; // If h == 1 then special case
 	Operation op;
 	u32 opLen;
