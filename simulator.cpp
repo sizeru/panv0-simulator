@@ -146,7 +146,7 @@ void Stack::clear() {
 
 struct Instruction {
 	Operation op;
-	u32 dataLen;
+	u32 len;
 	Data data;
 };
 
@@ -171,11 +171,15 @@ u16 cto(void *insn) {
 
 // Bit feild extract
 u64 bfe(u64 bitfield, u8 startPos, u8 length) {
-	return (bitfield >> startPos) & (1UL << length);
+	return (bitfield >> startPos) & ((1UL << length)-1);
 }
 
 void getInstrLen(void *instr, u32 &instrLen, u32 &h) {
 	h = cto(instr) + 1;
+	if (h == 1) {
+		instrLen = 1;
+		return;
+	}
 	u32 a = bfe(*(u64 *)instr, 0, h);
 	u32 b = bfe(*(u64 *)instr, h, h);
 	instrLen = 2 * a + b;
@@ -187,24 +191,25 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 	// Startpos and length are both in bits
 	u64 opStartPos = suffixLen;
 
+	switch (instrLen) {
+		case 1:
+			opLen = 3;
+			op = (Operation)bfe(*(u8*)instr, 1, opLen);
+			return;
+		case 2:
+		case 3:
+		case 4:
+			opLen = 2 * instrLen;
+			break;
+		default:
+			opLen = 2 * (4 + instrLen / 4);
+			break;
+	}
+
 	if (opLen > 8) {
 		// Unsupported
 		op = OP__MAX;
 		return;
-	}
-
-	switch (instrLen) {
-	case 1:
-		opLen = 3;
-		break;
-	case 2:
-	case 3:
-	case 4:
-		opLen = 2 * instrLen;
-		break;
-	default:
-		opLen = 2 * (4 + instrLen / 4);
-		break;
 	}
 
 	op = (Operation)bfe(*(u64 *)instr, suffixLen, opLen);
@@ -240,6 +245,7 @@ Data::Data(void *instr, u32 suffixLen, u32 opLen, u32 instrLen) {
 	u8* dataPos = (u8*)instr + (suffixLen+opLen)/8;
 	u8 dataOffset = (suffixLen + opLen) % 8;
 
+	// TODO: Segfault here
 	data[0] = dataPos[0] >> dataOffset;
 
 	for (int i = 1; i < (dataLen+7)/8; i++) {
@@ -257,12 +263,12 @@ Data::~Data() {
 
 Instruction getInstr(void *instrPos) {
 	u32 instrLen, h;
-	u32 suffixLen = 2 * h;
 	getInstrLen(instrPos, instrLen, h);
+	u32 suffixLen = 2 * h;
 	Operation op;
 	u32 opLen;
 	getOp(op, opLen, instrPos, instrLen, suffixLen);
-	Data data(instrPos, suffixLen, opLen, instrLen * 8);
+	Data data(instrPos, suffixLen, opLen, instrLen);
 	u32 dataLen = instrLen * 8 - opLen;
 	u32 rounded = (dataLen + 7) / 8;
 	switch (op) {
@@ -287,7 +293,8 @@ Instruction getInstr(void *instrPos) {
 		default:
 			break;
 	}
-		return Instruction{op, rounded, data};
+	printf("Instr: op: %u, len: %u, data: %lu\n", op, instrLen, data.contents.val);
+	return Instruction{op, instrLen, data};
 }
 
 // Returns true if the instruction was able to be run. False otherwise.
@@ -302,7 +309,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
 			Data shift = execStack.get(3);
-			printf("ADD: resLen: %lu, dst: %lu, op1: %lu, op2: %lu, shift: %lu",
+			printf("ADD: resLen: %lu, dst: %lu, op1: %lu, op2: %lu, shift: %lu\n",
 				resultLen.contents.val, dst.contents.val, op1.contents.val, op2.contents.val, shift.contents.val
 			);
 			break;
@@ -312,7 +319,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data target = execStack.get(0); // where to jump to
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
-			printf("ADD: cond: %lu, dst: %lu, op1: %lu, op2: %lu",
+			printf("ADD: cond: %lu, dst: %li, op1: %li, op2: %lu\n",
 				condCode.contents.val, target.contents.val, op1.contents.val, op2.contents.val
 			);
 			break;
@@ -323,7 +330,7 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
 			Data shift = execStack.get(3);
-			printf("ADD: jumpOffset: %lu, dst: %lu, op1: %lu, op2: %lu",
+			printf("ADD: jumpOffset: %li, dst: %li, op1: %li, op2: %lu\n",
 				offset.contents.val, dst.contents.val, op1.contents.val, op2.contents.val
 			);
 		}
@@ -350,7 +357,7 @@ int main(int argc, char *argv[]) {
 	size_t cacheBufferSize = 4096;
 	// Update defaults with user passed args
 	int flag;
-	while ((flag = getopt(argc, argv, "f:b:e:s:c:"))) {
+	while ((flag = getopt(argc, argv, "f:b:e:s:c:")) != -1) {
 		switch (flag) {
 		case 'f':
 			filename = optarg;
@@ -377,19 +384,26 @@ int main(int argc, char *argv[]) {
 
 	// Allocate buffer for instructions
 	unsigned char buffer[bufferSize];
-	size_t cursor = -1; // position in buffer
+	size_t cursor = 0; // position in buffer
 	size_t bytes_read = 0;
 
 	// Load file into buffer
 	FILE *file = fopen(filename, "r");
+	if (file == nullptr) {
+		printf("File: '%s' does not exist\n", filename);
+		return 2; 
+	}
 
 	// Stream the file into the buffer
-	while ((bytes_read != fread(buffer, bufferSize, 1, file))) {
+	while ((bytes_read = fread(buffer, 1, bufferSize, file)) != 0) {
+		printf("Read %lu bytes into buffer\n", bytes_read);
 		while (cursor < bytes_read) {
 			// Get different instruction fields
-			void *instrPos = buffer + cursor;
+			u8* instrPos = buffer + cursor;
+			// printf("Read Instr with starting byte: 0x%02x\n", *instrPos);
 			Instruction instr = getInstr(instrPos);
 			runInstr(instr, execStack, spmStack, memory);
+			cursor += instr.len;
 		}
 	}
 }
