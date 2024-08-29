@@ -1,2 +1,9 @@
 panv0
 src/*.o
+
+# Misc Files
+.cache
+.gdb_history
+.vscode
+compile_commands.json
+test

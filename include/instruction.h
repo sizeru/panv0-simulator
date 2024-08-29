@@ -2,29 +2,32 @@
 #define INSTRUCTION_H
 
 #include "shorttypes.h"
-#include "stack.h"
+#include "data.h"
 
 enum Operation {
-	OP_PUSHIL,
-	OP_PUSHIA,
-	OP_PUSHSL,
-	OP_PUSHSA,
-	OP_PUSHRL,
-	OP_PUSHRA,
+	OP_PREP,
+	OP_PUSHI,
+	OP_PUSHS,
+	OP_PUSHR,
 	OP_ADD,
 	OP_JUMPABS,
 	OP_JUMP,
 	OP__MAX,
 };
 
+static const char* opNames[OP__MAX] = {
+	"PREP", "PUSH.I", "PUSH.S", "PUSH.R", "ADD", "JUMP.ABS", "JUMP"
+};
+
 struct Instruction {
-	u32 len;
 	Operation op;
 	Data data;
+	u32 len;
 };
 
 Instruction getInstr(void *instrPos);
-bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]);
+
+bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stack& spmStack, u8 memory[], Regfile& regs);
 
 void printbits(void *insn, unsigned char len);
 

@@ -1,20 +1,19 @@
+#include <cstring>
 #include <stdio.h>
 #include "instruction.h"
 #include "data.h"
 
 // For debugging purposes
 void printbits(void *insn, unsigned char len) {
-    printf("\tbits: ");
 	insn = (u8 *)insn + len-1;
-    for (int i = len-1; i >= 0; i--) {
+	for (int i = len-1; i >= 0; i--) {
 		u8 byte = *(u8 *)insn;
-        for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
-        printf("_");
-        for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
-        printf(" ");
-	    insn = (u8 *)insn - 1;
-    }
-    printf("\n");
+		for (int i = 7; i >= 4; i--) putchar('0' + ((byte >> i) & 1));
+		printf("_");
+		for (int i = 3; i >= 0; i--) putchar('0' + ((byte >> i) & 1));
+		insn = (u8 *)insn - 1;
+		if (i-1 >= 0) printf(" ");
+	}
 }
 
 // Count trailing ones of an arbitrary data type
@@ -59,14 +58,8 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 			opLen = 3;
 			op = (Operation)bfe(*(u8*)instr, 1, opLen);
 			return;
-		case 2:
-			opLen = 4; // Double check this
-			break;
-		case 3:
-			opLen = 8; // Double check this
-			break;
-		case 4:
-			opLen = 8; // Double check this
+		case 2: case 3: case 4:
+			opLen = instrLen * 2;
 			break;
 		default:
 			opLen = 2 * (4 + instrLen / 4);
@@ -76,66 +69,133 @@ void getOp(Operation &op, u32 &opLen, void *instr, u32 instrLen,
 	if (opLen > 8) {
 		// Unsupported
 		op = OP__MAX;
-		return; }
+		return;
+	}
 
 	op = (Operation)bfe(*(u64 *)instr, suffixLen, opLen);
 	return;
 }
 
+// Reads in the instruction bits and retrieves the opcode, data, and
+// dataLength, and instruction length from an instructions bits.
 Instruction getInstr(void *instrPos) {
 	u32 instrLen, h;
 	getInstrLen(instrPos, instrLen, h);
-
-    printbits(instrPos, instrLen);
 	u32 suffixLen = h == 1 ? h : 2 * h; // If h == 1 then special case
+	printf("\tRead %u B instruction (", instrLen);
+	printbits(instrPos, instrLen);
+	printf(")\n");
+
 	Operation op;
 	u32 opLen;
 	getOp(op, opLen, instrPos, instrLen, suffixLen);
-	Data data(instrPos, suffixLen, opLen, instrLen);
-	u32 dataLen = instrLen * 8 - opLen;
-	u32 rounded = (dataLen + 7) / 8;
-	switch (op) {
-		case OP_PUSHIL:
-			data.flags = DATA_IS_INTEGER | DATA_IS_LITERAL;
-			break;
-		case OP_PUSHIA:
-			data.flags = DATA_IS_INTEGER | DATA_IS_ADDRESS;
-			break;
-		case OP_PUSHSL:
-			data.flags = DATA_IS_SPM | DATA_IS_LITERAL;
-			break;
-		case OP_PUSHSA:
-			data.flags = DATA_IS_SPM | DATA_IS_ADDRESS;
-			break;
-		case OP_PUSHRL:
-			data.flags = DATA_IS_REG | DATA_IS_LITERAL;
-			break;
-		case OP_PUSHRA:
-			data.flags = DATA_IS_REG | DATA_IS_ADDRESS;
-			break;
-		default:
-			break;
+	printf("\tOp: %u (%s)\n", op, opNames[op]);
+
+	// TODO(Nate): We should not be sign extending PUSH.I address
+	// instructions. This likely means that sign extension should only
+	// occur upon executing a non-prep instruction. This is passable for
+	// now, since we never push addresses.
+	bool shouldSignExtend = op == OP_PUSHI | op == OP_PUSHS;
+	Data data(instrPos, suffixLen + opLen, instrLen * 8 - (suffixLen + opLen), shouldSignExtend);
+	printf("\tData was %ub. Extended to %uB. (", instrLen*8-(suffixLen+opLen), data.length);
+	printbits(&data.contents.val, data.length);
+	printf(")\n");
+
+	u64 debugVal = data.contents.val;
+	if (shouldSignExtend) {
+		signExtend(reinterpret_cast<u8*>(&debugVal), data.length*8, 64);
 	}
-	printf("\tInstr: len: %u, op: %u, data: %ld\n", instrLen, op, data.contents.val);
-	return Instruction{instrLen, op, data};
+	printf("\t[ %s %li ]\n", opNames[op], debugVal);
+	return Instruction{op, data, instrLen};
 }
 
 // Returns true if the instruction was able to be run. False otherwise.
-bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 const memory[]) {
-	if (instr.op < 6) {
-		return execStack.push(instr.data);
-	}
-	switch (instr.op) {
+// Consider this to be the ALU
+// TODO: This whole function assumes data fits within 8B
+bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stack& spmStack, u8 memory[], Regfile& regs) {
+	switch(instr.op) {
+		case OP_PREP: {
+			// NOTE(Nate): Prep instructions will be classified as literals
+			return prepStack.push(instr.data); // This data length is guaranteed >0.
+		}
+		case OP_PUSHI: {
+			size_t dataSize = prepStack.get(0).contents.val;
+			DataFlags flags = dataSize == 0 ? DATA_IS_LITERAL : DATA_IS_ADDRESS;
+			flags |= DATA_IS_INTEGER;
+			u32 dataLength = flags.isAddress() ? dataSize : instr.data.length;
+			i64 debugVal = instr.data.contents.val;
+			signExtend(reinterpret_cast<u8*>(&debugVal), instr.data.length*8, 64);
+			printf("\tPushing %uB %s integer of value %li to stack\n", dataLength, flags.isAddress() ? "address" : "literal", debugVal);
+			bool ok = execStack.push((void*)&instr.data.contents.val, dataLength, flags);
+			if (!ok) {
+				return false;
+			}
+			prepStack.clear();
+			return true;
+		}
+		case OP_PUSHS: {
+			size_t dataSize = prepStack.get(0).contents.val;
+			DataFlags flags = dataSize == 0 ? DATA_IS_LITERAL : DATA_IS_ADDRESS;
+			flags |= DATA_IS_SPM;
+			u32 dataLength = flags.isAddress() ? dataSize : instr.data.length;
+			bool ok = execStack.push((void*)&instr.data.contents.val, dataLength, flags);
+			if (!ok) {
+				return false;
+			}
+			prepStack.clear();
+			return true;
+		}
+		case OP_PUSHR: {
+			size_t dataSize = prepStack.get(0).contents.val;
+			DataFlags flags = dataSize == 0 ? DATA_IS_LITERAL : DATA_IS_ADDRESS;
+			flags |= DATA_IS_REG;
+			u32 dataLength = flags.isAddress() ? dataSize : instr.data.length;
+			bool ok = execStack.push((void*)&instr.data.contents.val, dataLength, flags);
+			if (!ok) {
+				return false;
+			}
+			prepStack.clear();
+			return true;
+		}
 		case OP_ADD: {
 			Data resultLen = instr.data;
 			Data dst = execStack.get(0);
 			Data op1 = execStack.get(1);
 			Data op2 = execStack.get(2);
 			Data shift = execStack.get(3);
-			printf("\tADD: resLen: %lu, dst: %lu, op1: %lu, op2: %lu, shift: %lu\n",
-				resultLen.contents.val, dst.contents.val, op1.contents.val, op2.contents.val, shift.contents.val
-			);
-			break;
+			execStack.clear();
+
+			u64 valA = op1.getVal(spmStack, regs, memory);
+			u64 valB = op2.flags.isAddress() ? (*(u64*)(memory + op2.contents.val)) & ((1UL << op2.length) - 1) : op2.contents.val;
+			u64 valShift = shift.flags.isAddress() ? (*(u64*)(memory + shift.contents.val)) & ((1UL << shift.length) - 1) : shift.contents.val;
+
+			u64 result = valA + (valB << valShift);
+			printf("\t(ADD) %lx = %lx + (%lx << %lx)\n", result, valA, valB, valShift);
+			switch(dst.flags.getLocation()) {
+				case DATA_IS_INTEGER: {
+					// Integers address destinations must have number length. Literal destinations do nothing.
+					if (dst.flags.isAddress()) {
+						memcpy((void*)(memory + dst.contents.val), &result, dst.length);
+					}
+				}
+				case DATA_IS_SPM: {
+					if (dst.flags.isAddress()) {
+						memcpy((void*)(memory + spmStack.get(dst.contents.val).contents.val), &result, dst.length);
+					} else {
+						// TODO: Need to convert relative spm number to absolute spm number
+						memcpy(spmStack.getData(dst.contents.val), &result, dst.length);
+					}
+				}
+				case DATA_IS_REG: {
+					if (dst.flags.isAddress()) {
+						memcpy((void*)(memory + spmStack.get(dst.contents.val).contents.val), &result, dst.length);
+					} else {
+						memcpy(&regs[dst.contents.val].val, &result, dst.length);
+					}
+				}
+			}
+			printf("\t Result: %lu\n", result);
+			return true;
 		}
 		case OP_JUMPABS: {
 			Data condCode = instr.data;
@@ -145,7 +205,8 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			printf("\tADD: cond: %lu, dst: %li, op1: %li, op2: %lu\n",
 				condCode.contents.val, target.contents.val, op1.contents.val, op2.contents.val
 			);
-			break;
+			execStack.clear();
+			return true;
 		}
 		case OP_JUMP: {
 			Data offset = instr.data;
@@ -156,11 +217,12 @@ bool runInstr(const Instruction& instr, Stack& execStack, Stack& spmStack, u8 co
 			printf("\tADD: jumpOffset: %li, dst: %li, op1: %li, op2: %lu\n",
 				offset.contents.val, dst.contents.val, op1.contents.val, op2.contents.val
 			);
+			execStack.clear();
+			return true;
 		}
 		default: // Unknown instruction
 			return false;
 			break;
 	}
-	execStack.clear();
 	return true;
 }

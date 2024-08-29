@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <vector>
 
-#include "stack.h"
 #include "data.h"
 #include "instruction.h"
 
@@ -53,10 +52,13 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	// Create stacks
-	u8 memory[1024*8];
-	Stack spmStack(spmRegBufferSize, memory);
-	Stack execStack(execStackBufferSize, memory);
+	// Build computer out of components (data structures)
+	size_t memorySize = 1024*8;
+	u8 memory[memorySize];
+	Regfile regs(128, memorySize - 1);
+	Stack spmStack(spmRegBufferSize, memory, nullptr, regs);
+	Stack prepStack(spmRegBufferSize, memory, &spmStack, regs);
+	Stack execStack(execStackBufferSize, memory, &spmStack, regs);
 
 	// Allocate buffer for instructions
 	unsigned char buffer[bufferSize];
@@ -74,12 +76,15 @@ int main(int argc, char *argv[]) {
 	while ((bytes_read = fread(buffer, 1, bufferSize, file)) != 0) {
 		printf("Read %lu bytes into buffer\n", bytes_read);
 		while (cursor < bytes_read) {
-            printf("cursor: %d\n", cursor);
+            printf("cursor: %lu\n", cursor);
 			// Get different instruction fields
 			u8* instrPos = buffer + cursor;
 			// printf("Read Instr with starting byte: 0x%02x\n", *instrPos);
 			Instruction instr = getInstr(instrPos);
-			runInstr(instr, execStack, spmStack, memory);
+			bool ok = runInstr(instr, prepStack, execStack, spmStack, memory, regs);
+			if (!ok) {
+				return -1;
+			}
 			cursor += instr.len;
 		}
 	}

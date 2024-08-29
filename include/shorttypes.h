@@ -11,5 +11,6 @@
 #define i16 int16_t
 #define i32 int32_t
 #define i64 int64_t
+#define addr u64
 
 #endif
