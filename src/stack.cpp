@@ -73,6 +73,7 @@ Data Stack::get(u32 index) {
 
 	Data d;
 	d.length = length;
+	d.flags = flags;
 
 	// The raw data from the instruction is already in the stack. The job
 	// of get is to determine if/how to dereference that data
@@ -91,12 +92,14 @@ Data Stack::get(u32 index) {
 			case DATA_IS_REG:
 				d.contents.val = flags.isAddress() ? *(size_t*)(this->memory + this->regs[data].val) : this->regs[data].val;
 				d.contents.val &= (1UL << this->regs[data].size*8) - 1;
+				d.length = this->regs[data].size;
 				break;
 			case DATA_IS_SPM: {
 				Data spmData = spm->get(data);
 				size_t spmVal = spmData.contents.val & ((1UL << spmData.length) - 1);
 				d.contents.val = flags.isAddress() ? *(size_t*)(this->memory+spmVal) : spmData.contents.val;
 				d.contents.val &= (1UL << d.length*8) - 1;
+				d.length = this->regs[data].size;
 				break;
 			}
 			default:
@@ -113,7 +116,7 @@ void* Stack::getData(u32 index) {
 		return nullptr;
 	}
 	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
-	return reinterpret_cast<void*>(metadata >> 32);
+	return reinterpret_cast<void*>(this->dataBuffer + (metadata >> 32));
 }
 
 void Stack::clear() {

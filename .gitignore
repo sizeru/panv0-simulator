@@ -2,6 +2,7 @@ panv0
 src/*.o
 
 # Misc Files
+log.out
 .cache
 .gdb_history
 .vscode

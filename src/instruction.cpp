@@ -116,7 +116,7 @@ bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stac
 	switch(instr.op) {
 		case OP_PREP: {
 			// NOTE(Nate): Prep instructions will be classified as literals
-			return prepStack.push(instr.data); // This data length is guaranteed >0.
+			return prepStack.push((void*)&instr.data.contents.val, instr.data.length, DATA_IS_INTEGER | DATA_IS_LITERAL); // This data length is guaranteed >0.
 		}
 		case OP_PUSHI: {
 			size_t dataSize = prepStack.get(0).contents.val;
@@ -165,9 +165,9 @@ bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stac
 			Data shift = execStack.get(3);
 			execStack.clear();
 
-			u64 valA = op1.getVal(spmStack, regs, memory);
-			u64 valB = op2.flags.isAddress() ? (*(u64*)(memory + op2.contents.val)) & ((1UL << op2.length) - 1) : op2.contents.val;
-			u64 valShift = shift.flags.isAddress() ? (*(u64*)(memory + shift.contents.val)) & ((1UL << shift.length) - 1) : shift.contents.val;
+			u64 valA = op1.contents.val;
+			u64 valB = op2.contents.val;
+			u64 valShift = shift.contents.val;
 
 			u64 result = valA + (valB << valShift);
 			printf("\t(ADD) %lx = %lx + (%lx << %lx)\n", result, valA, valB, valShift);
@@ -183,13 +183,19 @@ bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stac
 						memcpy((void*)(memory + spmStack.get(dst.contents.val).contents.val), &result, dst.length);
 					} else {
 						// TODO: Need to convert relative spm number to absolute spm number
-						memcpy(spmStack.getData(dst.contents.val), &result, dst.length);
+						void* spmData = spmStack.getData(dst.contents.val);
+						if (!spmData) {
+							spmStack.push(0, dst.length, DATA_IS_INTEGER | DATA_IS_LITERAL);
+							spmData = spmStack.getData(dst.contents.val);
+						}
+						memcpy(spmData, &result, dst.length);
 					}
 				}
 				case DATA_IS_REG: {
 					if (dst.flags.isAddress()) {
-						memcpy((void*)(memory + spmStack.get(dst.contents.val).contents.val), &result, dst.length);
+						memcpy((void*)(memory + regs[dst.contents.val].val), &result, dst.length);
 					} else {
+						result &= (1UL << regs[dst.contents.val].size) - 1;
 						memcpy(&regs[dst.contents.val].val, &result, dst.length);
 					}
 				}

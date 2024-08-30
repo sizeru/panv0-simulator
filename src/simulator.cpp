@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Build computer out of components (data structures)
-	size_t memorySize = 1024*8;
+	size_t memorySize = 1024*4;
 	u8 memory[memorySize];
 	Regfile regs(128, memorySize - 1);
 	Stack spmStack(spmRegBufferSize, memory, nullptr, regs);

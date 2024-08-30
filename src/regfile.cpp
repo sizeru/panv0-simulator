@@ -7,7 +7,7 @@
 
 Regfile::Regfile(addr entryPoint, addr topOfStack) {
 	for (int i = 0; i < REG__MAX; i++) {
-		this->regs[i].size = 8;
+		this->regs[i].size = 12; // Size typically equal to size of memory
 		this->regs[i].val = 0;
 	}
 	this->regs[REG_SP].val = topOfStack;

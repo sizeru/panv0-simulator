@@ -31,21 +31,21 @@ struct DataFlags {
 };
 
 
-// Data is a struct which holds in-flight information which flows from
+// Data is a struct which holds *in-flight* information which flows from
 // one part of the machine to another. It represents a transient value,
 // and therefore, storing data is unique to a software simulator, but is
 // likely unnecessary with a hardware implementation. 
 struct Data {
-	u32 length; // Encodes the length of the value to be used in the instruction
-	            // This is either the length of the literal or the length of the
-							// value being pointed to. The length of the address is not
-							// required to be stored. Addresses are always of a fixed length
-							// on a particular system.
 	union {
 		size_t val;
 		u8* ptr;
 	} contents;
 	DataFlags flags;
+	u32 length; // Encodes the length of the value to be used in the instruction
+	            // This is either the length of the literal or the length of the
+							// value being pointed to. The length of the address is not
+							// required to be stored. Addresses are always of a fixed length
+							// on a particular system.
 
 	Data();
 	Data(void* instr, u32 dataOffset, u32 dataLen, bool signExtend);
