@@ -36,3 +36,8 @@ follows:
    stack
 4. The data from the stack along with the instruction's details are used
    to run the instruction.
+
+## Questions
+
+- What does it mean to do a 4B add and store the result in an 8B memory location?
+- It means the top 4 bytes are zeroed.

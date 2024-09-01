@@ -61,6 +61,7 @@ bool Stack::push(Data data, DataFlags flags) {
 // will be retrieved from, and whether the data will be sign extended or not.
 Data Stack::get(u32 index, u8 size, bool isSigned) {
 	if (index >= this->metaSize) {
+		printf("\tStack::get(%u) oob. Returned 0\n", index);
 		return Data();
 	}
 
@@ -69,14 +70,14 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 
 	u32 lenBits = (metadata & ((1UL << 32) - 1)) >> 3;
 	u32 lenBytes = (lenBits + 7) / 8;
-	void* dataBufferOffset = reinterpret_cast<void*>(metadata >> 32);
-	void* dataBufferPtr = dataBuffer + reinterpret_cast<uintptr_t>(dataBufferOffset);
+	uintptr_t dataBufferOffset = metadata >> 32;
+	void* dataBufferPtr = dataBuffer + dataBufferOffset;
 
 	if (size == 0) {
 		size = lenBits;
 	}
 
-	printf("\tStack::get(%u) -> %ub of data beginning from dataBufferOffset: %p. Flags: ", index, lenBits, dataBufferOffset);
+	printf("\tStack::get(%u) -> %ub of data beginning from dataBufferOffset: 0x%lx. Flags: ", index, lenBits, dataBufferOffset);
 	printbits(&flags, 1);
 	printf("\n");
 	// The raw data from the instruction is already in the stack. The job
@@ -138,10 +139,16 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 	return retrievedData;
 }
 
-bool Stack::write(u32 index, void* val, u32 len) {
+bool Stack::write(u32 index, void* val, u32 storeLen) {
 	if (index >= this->metaSize) {
 		return true;
 	}
+
+	// Clean up value to be stored (zero out top byte)
+	// u32 storeOffset = storeLen % 8;
+	u32 storeBytes = (storeLen + 7) / 8;
+	// u8* msb = reinterpret_cast<u8*>(val) + storeByte;
+	// *msb &= (1 << storeOffset) - 1;
 
 	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
 	DataFlags flags = metadata & 7;
@@ -149,6 +156,7 @@ bool Stack::write(u32 index, void* val, u32 len) {
 	u32 lenBytes = (lenBits + 7) / 8;
 	void* dataBufferOffset = reinterpret_cast<void*>(((metadata >> 32) + 7) / 8);
 	void* dataBufferPtr = dataBuffer + reinterpret_cast<uintptr_t>(dataBufferOffset);
+	
 
 	switch (flags.getLocation()) {
 		case DATA_IS_INTEGER: {
@@ -156,8 +164,10 @@ bool Stack::write(u32 index, void* val, u32 len) {
 			if (flags.isAddress()) {
 				// The size of an address is fixed on this machine.
 				// The length of the dereferenced data is variable
+				u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
 				memcpy(&ptr, dataBufferPtr, this->wordSize / 8);
-				memcpy(memory + ptr, val, lenBytes);
+				memcpy(memory + ptr, val, minBytes);
+				printf("\twrote %uB to int literal address: %lx\n", minBytes, ptr);
 			}
 			// Writing to a literal integer is throwing away a value.
 			// NOTE(Nate): This is potentially wasteful. On one hand, throwing
@@ -179,11 +189,15 @@ bool Stack::write(u32 index, void* val, u32 len) {
 			memcpy(&regIndex, dataBufferPtr, 1);
 			Register& reg = this->regs[regIndex];
 			if (flags.isAddress()) {
-				memcpy(memory + reg.val, val, lenBytes);
+				u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
+				memcpy(memory + reg.val, val, minBytes);
+				printf("\twrote %uB to reg[%lu] address: %lx\n", minBytes, regIndex, reg.val);
 			} else {
 				// Writing to a register overwrites the whole register
 				reg.val = 0;
-				memcpy(&reg.val, val, lenBytes);
+				u32 minBytes = (reg.size+7)/8 < storeBytes ? (reg.size+7)/8 : storeBytes;
+				memcpy(&reg.val, val, minBytes);
+				printf("\twrote %uB to reg[%lu]\n", minBytes, regIndex);
 			}
 			break;
 		}
@@ -193,11 +207,15 @@ bool Stack::write(u32 index, void* val, u32 len) {
 			u32 spmIndex = 0;
 			memcpy(&spmIndex, dataBufferPtr, lenBytes);
 			if (flags.isAddress()) {
-				memcpy(memory + spm->get(spmIndex, this->wordSize).val, val, lenBytes);
+				Data spmData = spm->get(spmIndex, this->wordSize);
+				u32 minBytes = (spmData.len+7)/8 < storeBytes ? (spmData.len+7)/8 : storeBytes;
+				memcpy(memory + spmData.val, val, minBytes);
+				printf("\twrote %uB to spm[%u] address: %lx\n", minBytes, spmIndex, spmData.val);
 			} else {
 				// Overwriting the contents of a spm value. Note that a spm
 				// value can never be grown
-				spm->replace(spmIndex, val, lenBits);
+				spm->replace(spmIndex, val, storeLen);
+				printf("\twrote %uB to spm[%u]\n", storeLen, spmIndex);
 			}
 			break;
 		}
@@ -205,10 +223,12 @@ bool Stack::write(u32 index, void* val, u32 len) {
 			panExit(PAN_ERR_DATA_MISSING_LOCATION);
 		}
 	}
+
+	printf("\twrote %ub value '%lx'.\n", storeLen, *(u64*)(val));
 	return true;
 }
 
-// Replace a value on the stack with another.
+// Replace all or part of a value on the stack with another.
 void Stack::replace(u32 index, void* val, u32 len) {
 	if (index >= this->metaSize) {
 		return;
@@ -221,7 +241,7 @@ void Stack::replace(u32 index, void* val, u32 len) {
 
 	u64 minLen = lenBytes < len ? lenBytes : len;
 	memcpy(dataBufferPtr, val, minLen);
-	memset(reinterpret_cast<void*>((uintptr_t)dataBufferPtr + minLen), 0, lenBytes - minLen);
+	// memset(reinterpret_cast<void*>((uintptr_t)dataBufferPtr + minLen), 0, lenBytes - minLen);
 
 }
 

@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
 
 	// Build computer out of components (data structures)
 	u8* memory = new u8[memSize];
-	Regfile regs(entry, memSize-1);
+	Regfile regs(entry, memSize-8);
 	Stack spmStack(spmRegBufferSize, memory, nullptr, regs, wordSize);
 	Stack prepStack(spmRegBufferSize, memory, &spmStack, regs, wordSize);
 	Stack execStack(execStackBufferSize, memory, &spmStack, regs, wordSize);
@@ -88,11 +88,11 @@ int main(int argc, char *argv[]) {
 	// Stream the file into the buffer
 	printf("Running program beginning from entry point: %lx\n\n", entry);
 	while (regs[REG_PC].val != haltAddress) {
-		printf("PC: %lx\n", regs[REG_PC].val);
+		printf("PC: 0x%lx\n", regs[REG_PC].val);
 		// Get different instruction fields
 		Instruction instr(memory, regs[REG_PC]);
 		printf("\tRead %u B instruction (", instr.len);
-		printbits(&instr, instr.len);
+		printbits(memory + regs[REG_PC].val, instr.len);
 		printf(")\n");
 		instr.predictPC(regs[REG_PC]);
 		bool ok = instr.run(execStack, prepStack, spmStack, regs, memory, wordSize);

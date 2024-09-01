@@ -87,7 +87,7 @@ u16 Instruction::parseLen(const u8* imem, const Register& pc) {
 }
 
 u16 Instruction::parseSuffixLen(const u8* imem, const Register& pc) {
-	bool lsb = *imem & 1;
+	bool lsb = *(imem + pc.val) & 1;
 	const void* insnbits = reinterpret_cast<const void*>(imem + pc.val);
 	return (cto(insnbits) + 1) * (1 + lsb);
 }
@@ -166,7 +166,7 @@ bool Instruction::run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* m
 				dataLen = this->data.len;
 			}
 
-			printf("\tPushing %u bit %s value of 0x%lx to stack\n", dataLen, flags.isAddress() ? "address" : "literal", this->data.val);
+			printf("\tStack::push() -> Pushing %u bit %s value of 0x%lx to stack\n", dataLen, flags.isAddress() ? "address" : "literal", this->data.val);
 			bool ok = exec.push(&this->data.val, dataLen, flags);
 			if (!ok) {
 				return false;
@@ -176,17 +176,22 @@ bool Instruction::run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* m
 		}
 		case OP_ADD: {
 			u64 resLen = this->data.val * 8;
-			if (resLen == 0) {
+			if (this->data.val == 0) {
 				resLen = exec.getLen(0);
+			} else {
 			}
 			Data a = exec.get(1, resLen, true);
 			Data b = exec.get(2, resLen, true);
 			Data shift = exec.get(3, resLen);
-			exec.clear();
 
 			u64 result = a.val + (b.val << shift.val);
+			if (resLen < sizeof(void*)*8) {
+				result &= (1UL << resLen) - 1;
+			}
 			printf("\t(%lub ADD) %lx = %lx + (%lx << %lx)\n", resLen, result, a.val, b.val, shift.val);
-			return exec.write(0, &result, resLen);
+			bool ok = exec.write(0, &result, resLen);
+			exec.clear();
+			return ok;
 		}
 		case OP_JUMPABS: {
 			Data condCode = this->data;

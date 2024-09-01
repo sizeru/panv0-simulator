@@ -58,7 +58,9 @@ void signExtend(u8* num, const u32 oldBitLength, const u32 newBitLength) {
 }
 
 void Data::resize(u32 newSize, bool isSigned) {
-	this->val &= (1UL << newSize) - 1;
+	if (newSize < sizeof(void*)*8) {
+		this->val &= (1UL << newSize) - 1;
+	}
 	if (isSigned) {
 		signExtend(reinterpret_cast<u8*>(&this->val), this->len, newSize);
 	}
