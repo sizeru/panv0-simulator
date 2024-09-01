@@ -10,8 +10,8 @@
 enum RegName {
 	REG_SP,  // Stack Pointer
 	REG_FP,  // Frame Pointer
-	REG_PC,  // Program Counter
 	REG_LR,  // Link Regitser
+	REG_PC,  // Program Counter
 	REG_ANC, // Anchor Register
 	REG__MAX
 };
@@ -26,7 +26,7 @@ struct Regfile {
 
   Register* operator &() { return this->regs; }
 	Register& operator[](std::size_t index) { return this->regs[index]; }
-	Regfile(panAddress entryPoint, panAddress topOfStack);
+	Regfile(panAddress entryPoint, panAddress returnPoint, panAddress topOfStack);
 };
 
 #endif /* REGFILE_H */

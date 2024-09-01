@@ -41,3 +41,7 @@ follows:
 
 - What does it mean to do a 4B add and store the result in an 8B memory location?
 - It means the top 4 bytes are zeroed.
+
+## Reasons a run may not complete
+
+- Stack grows beyond bounds

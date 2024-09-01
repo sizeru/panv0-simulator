@@ -55,11 +55,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	u64 entry = KiB(1);
+	panAddress entry = KiB(1);
+	panAddress returnPoint = 128;
 
 	// Build computer out of components (data structures)
 	u8* memory = new u8[memSize];
-	Regfile regs(entry, memSize-8);
+	Regfile regs(entry, returnPoint, memSize-8);
 	Stack spmStack(spmRegBufferSize, memory, nullptr, regs, wordSize);
 	Stack prepStack(spmRegBufferSize, memory, &spmStack, regs, wordSize);
 	Stack execStack(execStackBufferSize, memory, &spmStack, regs, wordSize);
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
 	// The starting point and size of the stack
 	size_t stackBottom = KiB(48);
 	size_t stackTop = KiB(16);
-	size_t haltAddress = regs[REG_FP].val;
+	size_t haltAddress = regs[REG_LR].val;
 	u8* imem = memory + entry;
 	size_t imemSize = KiB(7);
 
@@ -97,7 +98,9 @@ int main(int argc, char *argv[]) {
 		instr.predictPC(regs[REG_PC]);
 		bool ok = instr.run(execStack, prepStack, spmStack, regs, memory, wordSize);
 		if (!ok) {
+			printf("Run terminated prematurely\n");
 			return -1;
 		}
 	}
+	printf("Program terminated succesfully. (reached expected return point)\n");
 }
