@@ -202,7 +202,8 @@ bool Instruction::run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* m
 			if (op1.val == op2.val) {
 				regs[REG_PC].val = target.val;
 			} else {
-				regs[REG_PC].val += this->len;
+				// predict this by default
+				// regs[REG_PC].val += this->len;
 			}
 			printf("\t(JUMP.ABS): cond: %lx target: %lx, op1: %li, op2: %lu\n",
 				condCode.val, target.val, op1.val, op2.val
@@ -217,9 +218,10 @@ bool Instruction::run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* m
 			Data op1 = exec.get(1);
 			Data op2 = exec.get(2);
 			if (op1.val == op2.val) {
-				regs[REG_PC].val += offset.val;
+				// predict this by default
+				// regs[REG_PC].val += offset.val;
 			} else {
-				regs[REG_PC].val += this->len;
+				regs[REG_PC].val += this->len - offset.val;
 			}
 			printf("\tjumpOffset: %li, cond: %lx, op1: %li, op2: %lu\n",
 				offset.val, cond.val, op1.val, op2.val
