@@ -36,22 +36,19 @@ struct DataFlags {
 // and therefore, storing data is unique to a software simulator, but is
 // likely unnecessary with a hardware implementation. 
 struct Data {
-	union {
-		size_t val;
-		u8* ptr;
-	} contents;
-	DataFlags flags;
-	u32 length; // Encodes the length of the value to be used in the instruction
-	            // This is either the length of the literal or the length of the
-							// value being pointed to. The length of the address is not
-							// required to be stored. Addresses are always of a fixed length
-							// on a particular system.
+	size_t val;
+	u32 len; // Encodes the length of the value to be used in the instruction
+	         // This is either the length of the literal or the length of the
+	         // value being pointed to. The length of the address is not
+	         // required to be stored. Addresses are always of a fixed length
+	         // on a particular system.
 
 	Data();
-	Data(void* instr, u32 dataOffset, u32 dataLen, bool signExtend);
+	Data(const void* insnbits, u32 dataOffset, u32 dataLen);
 
+	u64 get(u8 ofSize);
 	u64 getVal(Stack& spm, Regfile& reg, u8 memory[]);
-	~Data();
+	void resize(u32 newSize, bool isSigned = false);
 };
 
 void signExtend(u8* num, const u32 oldBitLength, const u32 newBitLength);
@@ -73,15 +70,20 @@ class Stack {
 
 	Stack* spm;
 	Regfile& regs;
+	u8 wordSize; // in bits
 
 public:
-	Stack(u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile);
+	Stack(u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize);
 	~Stack();
 
-	bool push(Data data);
+	bool push(Data data, DataFlags flags);
 	bool push(void* data, u32 length, DataFlags flags);
 	void clear();
-	Data get(u32 index);
+	Data get(u32 index, u8 size = 0, bool isSigned = false);
 	void* getData(u32 index);
+	bool write(u32 index, void* val, u32 size);
+	void replace(u32 index, void* val, u32 size);
+	DataFlags getFlags(u32 index);
+	u32 getLen(u32 index);
 };
 #endif // DATA_H

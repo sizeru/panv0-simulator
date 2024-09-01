@@ -26,7 +26,7 @@ struct Regfile {
 
   Register* operator &() { return this->regs; }
 	Register& operator[](std::size_t index) { return this->regs[index]; }
-	Regfile(addr entryPoint, addr topOfStack);
+	Regfile(panAddress entryPoint, panAddress topOfStack);
 };
 
 #endif /* REGFILE_H */

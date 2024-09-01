@@ -4,8 +4,9 @@
  * architecture, but never explicitly encoded in the ISA.
  */
 #include "regfile.h"
+#include "shorttypes.h"
 
-Regfile::Regfile(addr entryPoint, addr topOfStack) {
+Regfile::Regfile(panAddress entryPoint, panAddress topOfStack) {
 	for (int i = 0; i < REG__MAX; i++) {
 		this->regs[i].size = 12; // Size typically equal to size of memory
 		this->regs[i].val = 0;

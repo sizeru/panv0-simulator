@@ -1,6 +1,7 @@
 #ifndef INSTRUCTION_H
 #define INSTRUCTION_H
 
+#include "regfile.h"
 #include "shorttypes.h"
 #include "data.h"
 
@@ -23,12 +24,22 @@ struct Instruction {
 	Operation op;
 	Data data;
 	u32 len;
+
+	Instruction();
+	Instruction(u8* mem, Register& pc);
+
+	bool run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* memory, u16 wordSize);
+	static u16 parseSuffixLen(const u8* mem, const Register& pc);
+	static u16 parseLen(const u8* mem, const Register& pc);
+	static Operation parseOp(const u8* mem, const Register& pc);
+	static u16 parseOpLen(u16 instrLen);
+	static Data parseData(const u8* mem, const Register& pc);
+
+	void predictPC(Register& pc);
 };
 
-Instruction getInstr(void *instrPos);
-
-bool runInstr(const Instruction& instr, Stack& prepStack, Stack& execStack, Stack& spmStack, u8 memory[], Regfile& regs);
-
 void printbits(void *insn, unsigned char len);
+
+u64 bfe(u64 bitfield, u8 startPos, u8 length);
 
 #endif // INSTRUCTION_H

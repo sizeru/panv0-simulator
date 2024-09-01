@@ -1,6 +1,7 @@
 /*
  * NOTE: This currently only supports instructions up to 8 bytes
  */
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdbool.h>
@@ -9,6 +10,8 @@
 #include <unistd.h>
 #include <vector>
 
+#include "panresult.h"
+#include "shorttypes.h"
 #include "data.h"
 #include "instruction.h"
 
@@ -19,26 +22,23 @@ struct ExecStackLine {
 
 int main(int argc, char *argv[]) {
 	if (argc <= 1) {
-		puts("./panv0 [-f <inputfile>] [-b <bufferSize>] "
+		puts("./panv0 [-f <inputfile>] "
 				 "[-e <execution-stack-buffer-size>] [-s <spm-reg-buffer-size>] "
-				 "[-c <cache-buffer-size>]");
+				 "[-m <memory-size>] [-w <word-size>]");
 		return 1;
 	}
 
 	char *filename = NULL;
-	size_t bufferSize = 4096;
 	size_t execStackBufferSize = 4096;
 	size_t spmRegBufferSize = 4096;
-	size_t cacheBufferSize = 4096;
+	size_t memSize = 4096;
+	u16 wordSize = 16;
 	// Update defaults with user passed args
 	int flag;
-	while ((flag = getopt(argc, argv, "f:b:e:s:c:")) != -1) {
+	while ((flag = getopt(argc, argv, "f:e:s:m:w:")) != -1) {
 		switch (flag) {
 		case 'f':
 			filename = optarg;
-			break;
-		case 'b':
-			bufferSize = atol(optarg);
 			break;
 		case 'e':
 			execStackBufferSize = atol(optarg);
@@ -46,24 +46,30 @@ int main(int argc, char *argv[]) {
 		case 's':
 			spmRegBufferSize = atol(optarg);
 			break;
-		case 'c':
-			cacheBufferSize = atol(optarg);
+		case 'm':
+			memSize = atol(optarg);
+			break;
+		case 'w':
+			wordSize = atol(optarg);
 			break;
 		}
 	}
 
-	// Build computer out of components (data structures)
-	size_t memorySize = 1024*4;
-	u8 memory[memorySize];
-	Regfile regs(128, memorySize - 1);
-	Stack spmStack(spmRegBufferSize, memory, nullptr, regs);
-	Stack prepStack(spmRegBufferSize, memory, &spmStack, regs);
-	Stack execStack(execStackBufferSize, memory, &spmStack, regs);
+	u64 entry = KiB(1);
 
-	// Allocate buffer for instructions
-	unsigned char buffer[bufferSize];
-	size_t cursor = 0; // position in buffer
-	size_t bytes_read = 0;
+	// Build computer out of components (data structures)
+	u8* memory = new u8[memSize];
+	Regfile regs(entry, memSize-1);
+	Stack spmStack(spmRegBufferSize, memory, nullptr, regs, wordSize);
+	Stack prepStack(spmRegBufferSize, memory, &spmStack, regs, wordSize);
+	Stack execStack(execStackBufferSize, memory, &spmStack, regs, wordSize);
+
+	// The starting point and size of the stack
+	size_t stackBottom = KiB(48);
+	size_t stackTop = KiB(16);
+	size_t haltAddress = regs[REG_FP].val;
+	u8* imem = memory + entry;
+	size_t imemSize = KiB(7);
 
 	// Load file into buffer
 	FILE *file = fopen(filename, "r");
@@ -72,20 +78,26 @@ int main(int argc, char *argv[]) {
 		return 2; 
 	}
 
+	// Allocate buffer for instructions
+	size_t bytes_read = fread(imem, 1, imemSize, file);
+	printf("Read %lu bytes from '%s' into instruction memory\n", bytes_read, filename);
+	if (bytes_read == 0) {
+		panExit(PAN_ERR_INSTRUCTION_READ);
+	}
+
 	// Stream the file into the buffer
-	while ((bytes_read = fread(buffer, 1, bufferSize, file)) != 0) {
-		printf("Read %lu bytes into buffer\n", bytes_read);
-		while (cursor < bytes_read) {
-            printf("cursor: %lu\n", cursor);
-			// Get different instruction fields
-			u8* instrPos = buffer + cursor;
-			// printf("Read Instr with starting byte: 0x%02x\n", *instrPos);
-			Instruction instr = getInstr(instrPos);
-			bool ok = runInstr(instr, prepStack, execStack, spmStack, memory, regs);
-			if (!ok) {
-				return -1;
-			}
-			cursor += instr.len;
+	printf("Running program beginning from entry point: %lx\n\n", entry);
+	while (regs[REG_PC].val != haltAddress) {
+		printf("PC: %lx\n", regs[REG_PC].val);
+		// Get different instruction fields
+		Instruction instr(memory, regs[REG_PC]);
+		printf("\tRead %u B instruction (", instr.len);
+		printbits(&instr, instr.len);
+		printf(")\n");
+		instr.predictPC(regs[REG_PC]);
+		bool ok = instr.run(execStack, prepStack, spmStack, regs, memory, wordSize);
+		if (!ok) {
+			return -1;
 		}
 	}
 }

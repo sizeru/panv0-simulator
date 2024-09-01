@@ -3,9 +3,7 @@
 #include <cstring>
 #include <stdio.h>
 
-Data::Data() : length(0), flags(0) {
-	this->contents.val = 0;
-}
+Data::Data() : len(0), val(0) {}
 
 // Round up to the nearest power of two. Most C primitives are powers of two.
 u32 roundUpPow2(u32 val) {
@@ -16,7 +14,6 @@ u32 roundUpPow2(u32 val) {
 	r |= r >> 8;
 	r |= r >> 16;
 	return r += 1;
-
 }
 
 /**
@@ -28,50 +25,9 @@ u32 roundUpPow2(u32 val) {
  * @param dataLen The length of the instruction in bits
  * @param signExtend Should the data be sign extended?
  */
-Data::Data(void *instr, u32 dataOffset, u32 dataLen, bool shouldSignExtend) : flags(0) {
-
-	// Calculate the size of the data we will use by rounding up to
-	// nearest power of 2. This will likely result in data expansion,
-	// which is convenient for use as operands later.
-	u32 dataByteLength = (dataLen + 7) / 8;
-	u32 roundedDataByteLength = roundUpPow2(dataByteLength);
-	this->length = roundedDataByteLength;
-
-	// Decide where the information from this instruction should be
-	// stored.
-	u8* data;
-	if (this->length > 8) {
-		// Data is too long to fit in this 
-		this->contents.ptr = new u8[this->length]();
-		data = (u8*)this->contents.ptr;
-	} else {
-		this->contents.val = 0;
-		data = (u8*)&this->contents.val;
-	}
-
-	// Copy the data from this instruction
-	u8* dataPos = (u8*)instr + dataOffset/8;
-	u8 dataByteOffset = dataOffset % 8;
-	// Copy first bit
-	data[0] = dataPos[0] >> dataByteOffset;
-	// Other bits
-	for (int i = 1; i < (dataLen+7)/8; i++) {
-		data[i-1] |= dataPos[i] >> (8-dataByteOffset);
-		data[i] |= dataPos[i] >> dataByteOffset;
-	}
-
-	// Sign extend if necessary
-	if (shouldSignExtend) {
-		signExtend(data, dataLen, this->length * 8);
-	}
-	return;
-}
-
-Data::~Data() {
-	if (this->length > sizeof(size_t)) {
-		delete[] this->contents.ptr;
-	}
-}
+Data::Data(const void *insnbits, u32 dataOffset, u32 dataLen)
+	: val(bfe(*reinterpret_cast<const u64 *>(insnbits), dataOffset, dataLen)),
+	  len(dataLen) {}
 
 DataFlags::DataFlags(u32 flags) : flags(flags) {}
 
@@ -101,17 +57,9 @@ void signExtend(u8* num, const u32 oldBitLength, const u32 newBitLength) {
 	return;
 }
 
-u64 Data::getVal(Stack& spm, Regfile& regs, u8 memory[]) {
-	u64 val = 0;
-	u32 sizeOfVal = 0;
-	switch (this->flags.getLocation()) {
-		case DATA_IS_INTEGER: val = this->contents.val; break;
-		case DATA_IS_REG: val = regs[this->contents.val].val; break;
-		case DATA_IS_SPM: val = spm.get(this->contents.val).contents.val; break;
-		default: break;
+void Data::resize(u32 newSize, bool isSigned) {
+	this->val &= (1UL << newSize) - 1;
+	if (isSigned) {
+		signExtend(reinterpret_cast<u8*>(&this->val), this->len, newSize);
 	}
-	if (this->flags.isAddress()) {
-		val = *(u64*)(memory + val) & ((1UL << this->length) - 1);
-	}
-	return val;
 }

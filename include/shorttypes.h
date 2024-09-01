@@ -11,6 +11,11 @@
 #define i16 int16_t
 #define i32 int32_t
 #define i64 int64_t
-#define addr u64
+#define panAddress u64
+
+#define KiB(num) (1024 * (num))
+#define MiB(num) (1024 * KiB(num))
+
+
 
 #endif
