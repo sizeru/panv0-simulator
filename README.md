@@ -37,11 +37,37 @@ follows:
 4. The data from the stack along with the instruction's details are used
    to run the instruction.
 
-## Questions
+## FAQ
 
 - What does it mean to do a 4B add and store the result in an 8B memory location?
-- It means the top 4 bytes are zeroed.
+   * It means the top 4 bytes are zeroed.
+- What are SPM registers
+   * SPM registers are used to store transient values. SPM is short for
+     scratch-pad memory.
+   * A SPM register can store either a literal or a pointer. Should it
+     store a literal, is also stores the length of the literal. Should
+     it store a pointer, the length of a pointer is already known to the
+     machine, so it instead stores the size of the data it is pointing
+     to.
+   * Regardless of the kind of data stored by the spm register, the spm
+     register can be treated as either a literal or a reference like any
+     other.
+   * The first time a SPM reg is a destination requires slightly
+     different syntax. This is because we must indicate what kind of
+     data the spm register holds, and its size. This is an
+     initialization step.
+   * Debating making this into a separate instruction. But it does not
+     seem difficult for the hardware. So perhaps a psuedo instruction.
+     `INIT(A) SPM0 4` perhaps?
 
 ## Reasons a run may not complete
 
 - Stack grows beyond bounds
+
+## TODO
+- Need to make SPM register indices relative.
+- The return value is SPM0
+- The args are < SPM0
+- Reading from and writing to the offset of an address is useful to do in
+  a single instruction. Make the ISA support this.
+- Add INIT psuedo-op: INIT SPM4 = PUSHA SPM4

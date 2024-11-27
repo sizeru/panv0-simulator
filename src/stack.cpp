@@ -1,30 +1,29 @@
+#include "data.h"
+#include "instruction.h"
+#include "panresult.h"
+#include "regfile.h"
 #include <cstring>
 #include <stdio.h>
-#include "data.h"
-#include "instruction.h" 
-#include "panresult.h"
 
-// A stack holds a deep copy of any data pushed into it. By default, a
-// stack is able to 
-
-
-Stack::Stack(u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize)
+// A stack holds a deep copy of any data pushed into it.
+Stack::Stack(
+	u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize
+)
 	: buffer(new u8[bufferSize]), capacity(bufferSize), memory(memory),
-	  dataCap((bufferSize / 9) * 8), metaCap((bufferSize - dataCap)/8), dataSize(0),
-	  metaSize(0), metaBuffer((u64*)buffer), dataBuffer(buffer + metaCap),
-		spm(spmStack), regs(regfile), wordSize(wordSize) {}
+		dataCap((bufferSize / 9) * 8), metaCap((bufferSize - dataCap) / 8),
+		dataSize(0), metaSize(0), metaBuffer((u64*)buffer),
+		dataBuffer(buffer + metaCap), spm(spmStack), regs(regfile),
+		wordSize(wordSize) {}
 
-Stack::~Stack() {
-	delete[] buffer;
-}
+Stack::~Stack() { delete[] buffer; }
 
 // Push a value to the stack
 bool Stack::push(void* data, u32 len, DataFlags dataFlags) {
-	// Error checking  
-	if (8*this->metaSize + 8 > this->metaCap) {
+	// Error checking
+	if (8 * this->metaSize + 8 > this->metaCap) {
 		return false;
 	}
-	if ((this->dataSize + (len+7)/8) > this->dataCap) {
+	if ((this->dataSize + (len + 7) / 8) > this->dataCap) {
 		return false;
 	}
 
@@ -34,8 +33,8 @@ bool Stack::push(void* data, u32 len, DataFlags dataFlags) {
 
 	// Add the data
 	memcpy(dataBuffer + dataSize, data, (len + 7) / 8);
-	dataSize += (len+7)/8;
-	
+	dataSize += (len + 7) / 8;
+
 	return true;
 }
 
@@ -52,7 +51,8 @@ bool Stack::push(Data data, DataFlags flags) {
 	// 	printf("\t\tval: %ld\n", data.val);
 	// 	printf("\t\tlength: %d\n", data.len);
 	// 	printf("\t\tflags: %i\n", static_cast<u32>(data.flags));
-	// 	return this->push(&data.val, data.len, data.flags); // This was previously flipped. Bug
+	// 	return this->push(&data.val, data.len, data.flags); // This was previously
+	// flipped. Bug
 	// }
 }
 
@@ -65,7 +65,8 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 		return Data();
 	}
 
-	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
+	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of
+	                                        // stack is intended
 	DataFlags flags = metadata & 7;
 
 	u32 lenBits = (metadata & ((1UL << 32) - 1)) >> 3;
@@ -77,61 +78,76 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 		size = lenBits;
 	}
 
-	printf("\tStack::get(%u) -> %ub of data beginning from dataBufferOffset: 0x%lx. Flags: ", index, lenBits, dataBufferOffset);
+	printf(
+		"\tStack::get(%u) -> %ub of data beginning from dataBufferOffset: "
+		"0x%lx. Flags: ",
+		index,
+		lenBits,
+		dataBufferOffset
+	);
 	printbits(&flags, 1);
 	printf("\n");
 	// The raw data from the instruction is already in the stack. The job
 	// of get is to determine if/how to dereference that data
 	if (lenBytes > sizeof(size_t)) {
-		printf("Instruction lengths longer than %lu not supported in this version\n", sizeof(size_t));
+		printf(
+			"Instruction lengths longer than %lu not supported in this version\n",
+			sizeof(size_t)
+		);
 		exit(4);
 	}
 
 	Data retrievedData;
 	switch (flags.getLocation()) {
-		case DATA_IS_INTEGER: {
-			if (flags.isAddress()) {
-				// The size of an address is fixed on this machine.
-				// The length of the dereferenced data is variable
-				u64 stackData = 0;
-				memcpy(&stackData, dataBufferPtr, this->wordSize / 8);
-				void* addr = memory + stackData;
-				memcpy(&retrievedData.val, addr, lenBytes);
-			} else {
-				// The length of the literal stack data is variable
-				memcpy(&retrievedData.val, dataBufferPtr, lenBytes);
-			}
-			retrievedData.len = lenBits;
-			break;
+	case DATA_IS_INTEGER: {
+		if (flags.isAddress()) {
+			// The size of an address is fixed on this machine.
+			// The length of the dereferenced data is variable
+			u64 stackData = 0;
+			memcpy(&stackData, dataBufferPtr, this->wordSize / 8);
+			void* addr = memory + stackData;
+			memcpy(&retrievedData.val, addr, lenBytes);
+		} else {
+			// The length of the literal stack data is variable
+			memcpy(&retrievedData.val, dataBufferPtr, lenBytes);
 		}
-		case DATA_IS_REG: {
-			u64 regIndex = 0;
-			// This machine has < 8 registers. This fits within 1 byte.
-			// NOTE(Nate): This is not forward-compatible
-			memcpy(&regIndex, dataBufferPtr, 1);
-			Register& reg = this->regs[regIndex];
-			if (flags.isAddress()) {
-				void* addr = memory + reg.val;
-				memcpy(&retrievedData.val, addr, lenBytes);
-			} else {
-				retrievedData.val = reg.val;
-			}
-			retrievedData.len = lenBits;
-			break;
+		retrievedData.len = lenBits;
+		break;
+	}
+	case DATA_IS_REG: {
+		u64 regIndex = 0;
+		// This machine has < 8 registers. This fits within 1 byte.
+		// NOTE(Nate): This is not forward-compatible
+		memcpy(&regIndex, dataBufferPtr, 1);
+		Register& reg = this->regs[regIndex];
+		if (flags.isAddress()) {
+			void* addr = memory + reg.val;
+			memcpy(&retrievedData.val, addr, lenBytes);
+		} else {
+			retrievedData.val = reg.val;
 		}
-		case DATA_IS_SPM: {
-			// The spm stack stores the size of the data inside of it. Should
-			// the spm stack store an address, the address must be of a known
-			// size, and thus, the spm stack stores the length of the address
-			// inside of it. NOTE(Nate): Is this forward-compatible?
-			u32 spmIndex = 0;
-			memcpy(&spmIndex, dataBufferPtr, lenBytes);
-			retrievedData = spm->get(spmIndex, size);
-			break;
-		}
-		default: {
-			panExit(PAN_ERR_DATA_MISSING_LOCATION);
-		}
+		retrievedData.len = lenBits;
+		break;
+	}
+	case DATA_IS_SPM: {
+		// The spm stack stores the size of the data inside of it. Should
+		// the spm stack store an address, the address must be of a known
+		// size, and thus, the spm stack stores the length of the address
+		// inside of it. NOTE(Nate): Is this forward-compatible?
+
+		// Get SPM index
+		i32 spmIndex = 0;
+		memcpy(&spmIndex, dataBufferPtr, lenBytes);
+		signExtend(reinterpret_cast<u8*>(&spmIndex), lenBits, sizeof(i32) * 8);
+		// Convert relative spmIndex to absolute spmIndex
+		spmIndex += this->regs[REG_ANC].val;
+		printf(
+			"\tSPM%li -> SPM.ABS%i\n", spmIndex - this->regs[REG_ANC].val, spmIndex
+		);
+		retrievedData = spm->get(spmIndex, size);
+		break;
+	}
+	default: panExit(PAN_ERR_DATA_MISSING_LOCATION);
 	}
 
 	retrievedData.resize(size, isSigned);
@@ -139,6 +155,7 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 	return retrievedData;
 }
 
+// Writes to a destination register on the stack.
 bool Stack::write(u32 index, void* val, u32 storeLen) {
 	if (index >= this->metaSize) {
 		return true;
@@ -150,78 +167,106 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 	// u8* msb = reinterpret_cast<u8*>(val) + storeByte;
 	// *msb &= (1 << storeOffset) - 1;
 
-	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
+	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of
+	                                        // stack is intended
 	DataFlags flags = metadata & 7;
 	u32 lenBits = (metadata & ((1UL << 32) - 1)) >> 3;
 	u32 lenBytes = (lenBits + 7) / 8;
 	void* dataBufferOffset = reinterpret_cast<void*>(((metadata >> 32) + 7) / 8);
-	void* dataBufferPtr = dataBuffer + reinterpret_cast<uintptr_t>(dataBufferOffset);
-	
+	void* dataBufferPtr =
+		dataBuffer + reinterpret_cast<uintptr_t>(dataBufferOffset);
 
 	switch (flags.getLocation()) {
-		case DATA_IS_INTEGER: {
-			u64 ptr = 0;
-			if (flags.isAddress()) {
-				// The size of an address is fixed on this machine.
-				// The length of the dereferenced data is variable
-				u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
-				memcpy(&ptr, dataBufferPtr, this->wordSize / 8);
-				memcpy(memory + ptr, val, minBytes);
-				printf("\twrote %uB to int literal address: %lx\n", minBytes, ptr);
-			}
-			// Writing to a literal integer is throwing away a value.
-			// NOTE(Nate): This is potentially wasteful. On one hand, throwing
-			// away a value allows us to implement a NOP. On another hand, we
-			// could be doing something instead of writing to nothing. Another
-			// idea is that writing to a literal integer means writing to that
-			// address, while writing to a an address means dereferencing the
-			// value at a particular place in memory and writing there. This
-			// is potentially more useful, as it allows for the C line: `int*
-			// x = *(int*)(0xdeadbeef)` without the need for transient values.
-			// ANOTHER possible option is that writing to a literal writes to
-			// a literal value on this stack.
-			break;
+	case DATA_IS_INTEGER: {
+		u64 ptr = 0;
+		if (flags.isAddress()) {
+			// The size of an address is fixed on this machine.
+			// The length of the dereferenced data is variable
+			u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
+			memcpy(&ptr, dataBufferPtr, this->wordSize / 8);
+			memcpy(memory + ptr, val, minBytes);
+			printf("\twrote %uB to int literal address: %lx\n", minBytes, ptr);
 		}
-		case DATA_IS_REG: {
-			u64 regIndex = 0;
-			// This machine has < 8 registers. This fits within 1 byte.
-			// NOTE(Nate): This is not forward-compatible
-			memcpy(&regIndex, dataBufferPtr, 1);
-			Register& reg = this->regs[regIndex];
-			if (flags.isAddress()) {
-				u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
-				memcpy(memory + reg.val, val, minBytes);
-				printf("\twrote %uB to reg[%lu] address: %lx\n", minBytes, regIndex, reg.val);
-			} else {
-				// Writing to a register overwrites the whole register
-				reg.val = 0;
-				u32 minBytes = (reg.size+7)/8 < storeBytes ? (reg.size+7)/8 : storeBytes;
-				memcpy(&reg.val, val, minBytes);
-				printf("\twrote %uB to reg[%lu]\n", minBytes, regIndex);
-			}
-			break;
+		// Writing to a literal integer is throwing away a value.
+		// NOTE(Nate): This is potentially wasteful. On one hand, throwing
+		// away a value allows us to implement a NOP. On another hand, we
+		// could be doing something instead of writing to nothing. Another
+		// idea is that writing to a literal integer means writing to that
+		// address, while writing to a an address means dereferencing the
+		// value at a particular place in memory and writing there. This
+		// is potentially more useful, as it allows for the C line: `int*
+		// x = *(int*)(0xdeadbeef)` without the need for transient values.
+		// ANOTHER possible option is that writing to a literal writes to
+		// a literal value on this stack.
+		break;
+	}
+	case DATA_IS_REG: {
+		u64 regIndex = 0;
+		// This machine has < 8 registers. This fits within 1 byte.
+		// NOTE(Nate): This is not forward-compatible
+		memcpy(&regIndex, dataBufferPtr, 1);
+		Register& reg = this->regs[regIndex];
+		if (flags.isAddress()) {
+			u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
+			memcpy(memory + reg.val, val, minBytes);
+			printf(
+				"\twrote %uB to reg[%lu] address: %lx\n", minBytes, regIndex, reg.val
+			);
+		} else {
+			// Writing to a register overwrites the whole register
+			reg.val = 0;
+			u32 minBytes =
+				(reg.size + 7) / 8 < storeBytes ? (reg.size + 7) / 8 : storeBytes;
+			memcpy(&reg.val, val, minBytes);
+			printf("\twrote %uB to reg[%lu]\n", minBytes, regIndex);
 		}
-		case DATA_IS_SPM: {
-			// The spm stack stores the size of the data inside of it.
-			// NOTE(Nate): This is not forward-compatible
-			u32 spmIndex = 0;
-			memcpy(&spmIndex, dataBufferPtr, lenBytes);
+		break;
+	}
+	case DATA_IS_SPM: {
+		// The spm stack stores the size of the data inside of it.
+		// NOTE(Nate): This is not forward-compatible
+		u32 spmIndex = 0;
+		memcpy(&spmIndex, dataBufferPtr, lenBytes);
+		spmIndex += this->regs[REG_ANC].val;
+		if (spmIndex >= spm->metaSize) {
+			// TODO: Add error checking here for out-of-order spm additions
+			printf(
+				"\tSPM: pushing spm[%u] as '%s' onto spm stack\n",
+				spmIndex,
+				flags.isAddress() ? "address" : "literal"
+			);
+			spm->push(
+				val,
+				flags.isAddress() ? this->wordSize : storeLen,
+				DATA_IS_INTEGER | flags.isAddress()
+			);
+		} else {
 			if (flags.isAddress()) {
 				Data spmData = spm->get(spmIndex, this->wordSize);
-				u32 minBytes = (spmData.len+7)/8 < storeBytes ? (spmData.len+7)/8 : storeBytes;
+				u32 minBytes = (spmData.len + 7) / 8 < storeBytes
+				                 ? (spmData.len + 7) / 8
+				                 : storeBytes;
 				memcpy(memory + spmData.val, val, minBytes);
-				printf("\twrote %uB to spm[%u] address: %lx\n", minBytes, spmIndex, spmData.val);
+				printf(
+					"\twrote %uB to spm[%u] address: %lx\n",
+					minBytes,
+					spmIndex,
+					spmData.val
+				);
 			} else {
 				// Overwriting the contents of a spm value. Note that a spm
-				// value can never be grown
+				// value can never be grown once set
+				// NOTE(Nate): This if statement assumes that the compiler /
+				// programmer will always initialize new spm registers in order.
 				spm->replace(spmIndex, val, storeLen);
-				printf("\twrote %uB to spm[%u]\n", storeLen, spmIndex);
+				printf("\twrote %ub to spm[%u]\n", storeLen, spmIndex);
 			}
-			break;
 		}
-		default: {
-			panExit(PAN_ERR_DATA_MISSING_LOCATION);
-		}
+		break;
+	}
+	default: {
+		panExit(PAN_ERR_DATA_MISSING_LOCATION);
+	}
 	}
 
 	printf("\twrote %ub value '%lx'.\n", storeLen, *(u64*)(val));
@@ -234,23 +279,26 @@ void Stack::replace(u32 index, void* val, u32 len) {
 		return;
 	}
 
-	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
+	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of
+	                                        // stack is intended
 	u32 lenBits = (metadata & ((1UL << 32) - 1)) >> 3;
 	u32 lenBytes = (lenBits + 7) / 8;
 	void* dataBufferPtr = reinterpret_cast<void*>(metadata >> 32);
 
 	u64 minLen = lenBytes < len ? lenBytes : len;
 	memcpy(dataBufferPtr, val, minLen);
-	// memset(reinterpret_cast<void*>((uintptr_t)dataBufferPtr + minLen), 0, lenBytes - minLen);
-
+	// memset(reinterpret_cast<void*>((uintptr_t)dataBufferPtr + minLen), 0,
+	// lenBytes - minLen);
 }
 
-// Return a pointer to the data at this index. Useful for reading or writing literals.
+// Return a pointer to the data at this index. Useful for reading or writing
+// literals.
 void* Stack::getData(u32 index) {
 	if (index >= this->metaSize) {
 		return nullptr;
 	}
-	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
+	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of
+	                                        // stack is intended
 	return reinterpret_cast<void*>(this->dataBuffer + (metadata >> 32));
 }
 
@@ -264,7 +312,8 @@ DataFlags Stack::getFlags(u32 index) {
 		return 0;
 	}
 
-	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of stack is intended
+	u64 metadata = this->metaBuffer[index]; // Absolute indexing from base of
+	                                        // stack is intended
 	return metadata & 7;
 }
 
@@ -279,31 +328,31 @@ u32 Stack::getLen(u32 index) {
 	u64 dataOffset = metadata >> 32;
 	u8* data = this->dataBuffer + dataOffset;
 	u32 lenBytes = (dataSize + 7) / 8;
-	
+
 	u32 len;
 	switch (flags.getLocation()) {
-		case DATA_IS_INTEGER: {
-			len = dataSize;
-			break;
-		}
-		case DATA_IS_SPM: {
-			// The spm stack stores its own information
-			u64 spmIndex = 0;
-			memcpy(&spmIndex, data, lenBytes);
-			len = this->spm->getLen(index);
-			break;
-		}
-		case DATA_IS_REG: {
-			u64 regIndex = 0;
-			memcpy(&regIndex, data, lenBytes);
-			len = this->regs[regIndex].size;
-			break;
-		}
-		default: {
-			panExit(PAN_ERR_DATA_MISSING_LOCATION);
-			break;
-		}
+	case DATA_IS_INTEGER: {
+		len = dataSize;
+		break;
 	}
-	
+	case DATA_IS_SPM: {
+		// The spm stack stores its own information
+		u64 spmIndex = 0;
+		memcpy(&spmIndex, data, lenBytes);
+		len = this->spm->getLen(index);
+		break;
+	}
+	case DATA_IS_REG: {
+		u64 regIndex = 0;
+		memcpy(&regIndex, data, lenBytes);
+		len = this->regs[regIndex].size;
+		break;
+	}
+	default: {
+		panExit(PAN_ERR_DATA_MISSING_LOCATION);
+		break;
+	}
+	}
+
 	return len;
 }

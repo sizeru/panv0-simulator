@@ -1,5 +1,5 @@
 EXEC = panv0
-CFLAGS = -std=c++11
+CFLAGS = -std=c++11 -Wall
 CC = g++
 SRC = src/simulator.cpp src/stack.cpp src/data.cpp src/instruction.cpp src/regfile.cpp src/panresult.cpp
 

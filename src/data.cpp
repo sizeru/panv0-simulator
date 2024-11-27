@@ -1,9 +1,8 @@
 #include "data.h"
 #include "instruction.h"
 #include <cstring>
-#include <stdio.h>
 
-Data::Data() : len(0), val(0) {}
+Data::Data() : val(0), len(0) {}
 
 // Round up to the nearest power of two. Most C primitives are powers of two.
 u32 roundUpPow2(u32 val) {
@@ -25,19 +24,15 @@ u32 roundUpPow2(u32 val) {
  * @param dataLen The length of the instruction in bits
  * @param signExtend Should the data be sign extended?
  */
-Data::Data(const void *insnbits, u32 dataOffset, u32 dataLen)
-	: val(bfe(*reinterpret_cast<const u64 *>(insnbits), dataOffset, dataLen)),
-	  len(dataLen) {}
+Data::Data(const void* insnbits, u32 dataOffset, u32 dataLen)
+	: val(bfe(*reinterpret_cast<const u64*>(insnbits), dataOffset, dataLen)),
+		len(dataLen) {}
 
 DataFlags::DataFlags(u32 flags) : flags(flags) {}
 
-bool DataFlags::isAddress() {
-	return this->flags & 1;
-}
+bool DataFlags::isAddress() { return this->flags & 1; }
 
-DataFlags DataFlags::getLocation() {
-	return DataFlags(this->flags & 6);
-}
+DataFlags DataFlags::getLocation() { return DataFlags(this->flags & 6); }
 
 void signExtend(u8* num, const u32 oldBitLength, const u32 newBitLength) {
 	u8 byteIndex = (oldBitLength - 1) / 8;
@@ -58,7 +53,7 @@ void signExtend(u8* num, const u32 oldBitLength, const u32 newBitLength) {
 }
 
 void Data::resize(u32 newSize, bool isSigned) {
-	if (newSize < sizeof(void*)*8) {
+	if (newSize < sizeof(void*) * 8) {
 		this->val &= (1UL << newSize) - 1;
 	}
 	if (isSigned) {

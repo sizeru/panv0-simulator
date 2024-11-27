@@ -1,7 +1,7 @@
 #ifndef SHORTTYPES_H
 #define SHORTTYPES_H
 
-#include <cstdint>
+#include <stdint.h>
 
 #define u8 uint8_t
 #define u16 uint16_t
@@ -16,6 +16,4 @@
 #define KiB(num) (1024 * (num))
 #define MiB(num) (1024 * KiB(num))
 
-
-
-#endif
+#endif /* SHORTTYPES_H */

@@ -1,9 +1,9 @@
 #ifndef DATA_H
 #define DATA_H
 
-#include <stdlib.h>
-#include "shorttypes.h"
 #include "regfile.h"
+#include "shorttypes.h"
+#include <stdlib.h>
 
 class Stack;
 
@@ -26,15 +26,14 @@ struct DataFlags {
 	bool isAddress();
 	DataFlags getLocation();
 
-	operator u32 &() { return this->flags; }
-  u32* operator &() { return &this->flags; }
+	operator u32&() { return this->flags; }
+	u32* operator&() { return &this->flags; }
 };
-
 
 // Data is a struct which holds *in-flight* information which flows from
 // one part of the machine to another. It represents a transient value,
 // and therefore, storing data is unique to a software simulator, but is
-// likely unnecessary with a hardware implementation. 
+// likely unnecessary with a hardware implementation.
 struct Data {
 	size_t val;
 	u32 len; // Encodes the length of the value to be used in the instruction
@@ -73,7 +72,9 @@ class Stack {
 	u8 wordSize; // in bits
 
 public:
-	Stack(u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize);
+	Stack(
+		u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize
+	);
 	~Stack();
 
 	bool push(Data data, DataFlags flags);

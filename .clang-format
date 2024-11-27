@@ -1,0 +1,32 @@
+---
+# This is appraoching my ideal config. Ideally, I'd like to wrap function
+# braces if the declaration is more than one line. The rest of this is okay for
+# now though
+
+# General Cpp Styling Choices
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+UseTab: AlignWithSpaces # Tabs for indents and continuations. Spaces for alignment.
+IndentWidth: 2
+TabWidth: 2
+ContinuationIndentWidth: 2
+ConstructorInitializerIndentWidth: 2
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+BreakConstructorInitializers: BeforeColon
+
+# Line breaks and braces
+PenaltyReturnTypeOnItsOwnLine: 1000 # Avoid isolated return types
+Cpp11BracedListStyle: true # Use Formatted initializer lists
+BinPackArguments: false # No packing of arguments and initializers
+AllowAllArgumentsOnNextLine: true # minimize vertical space without binning
+
+AlignAfterOpenBracket: BlockIndent # Uses block parameters when line too long. Breaks on declarations
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: MultiLine
+#  AfterFunction: true
+---

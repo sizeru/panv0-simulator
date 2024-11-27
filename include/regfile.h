@@ -24,8 +24,8 @@ struct Register {
 struct Regfile {
 	Register regs[REG__MAX];
 
-  Register* operator &() { return this->regs; }
-	Register& operator[](std::size_t index) { return this->regs[index]; }
+	Register* operator&() { return this->regs; }
+	Register& operator[](u64 index) { return this->regs[index]; }
 	Regfile(panAddress entryPoint, panAddress returnPoint, panAddress topOfStack);
 };
 

@@ -1,9 +1,9 @@
 #ifndef INSTRUCTION_H
 #define INSTRUCTION_H
 
+#include "data.h"
 #include "regfile.h"
 #include "shorttypes.h"
-#include "data.h"
 
 enum Operation {
 	OP_PREP,
@@ -28,7 +28,10 @@ struct Instruction {
 	Instruction();
 	Instruction(u8* mem, Register& pc);
 
-	bool run(Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* memory, u16 wordSize);
+	bool run(
+		Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* memory,
+		u16 wordSize
+	);
 	static u16 parseSuffixLen(const u8* mem, const Register& pc);
 	static u16 parseLen(const u8* mem, const Register& pc);
 	static Operation parseOp(const u8* mem, const Register& pc);
@@ -38,7 +41,7 @@ struct Instruction {
 	void predictPC(Register& pc);
 };
 
-void printbits(void *insn, unsigned char len);
+void printbits(void* insn, unsigned char len);
 
 u64 bfe(u64 bitfield, u8 startPos, u8 length);
 
