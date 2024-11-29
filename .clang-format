@@ -5,6 +5,7 @@
 
 # General Cpp Styling Choices
 Language: Cpp
+ColumnLimit: 80
 DerivePointerAlignment: false
 PointerAlignment: Left
 ReferenceAlignment: Pointer
@@ -12,14 +13,16 @@ UseTab: AlignWithSpaces # Tabs for indents and continuations. Spaces for alignme
 IndentWidth: 2
 TabWidth: 2
 ContinuationIndentWidth: 2
-ConstructorInitializerIndentWidth: 2
+ConstructorInitializerIndentWidth: 4
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
-BreakConstructorInitializers: BeforeColon
+BreakConstructorInitializers: AfterColon
 
 # Line breaks and braces
 PenaltyReturnTypeOnItsOwnLine: 1000 # Avoid isolated return types
+# PenaltyBreakAssignment: 1000
+PenaltyBreakComment: 100
 Cpp11BracedListStyle: true # Use Formatted initializer lists
 BinPackArguments: false # No packing of arguments and initializers
 AllowAllArgumentsOnNextLine: true # minimize vertical space without binning

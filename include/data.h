@@ -78,7 +78,7 @@ public:
 	~Stack();
 
 	bool push(Data data, DataFlags flags);
-	bool push(void* data, u32 length, DataFlags flags);
+	bool push(const void* data, u32 length, DataFlags flags);
 	void clear();
 	Data get(u32 index, u8 size = 0, bool isSigned = false);
 	void* getData(u32 index);
@@ -86,5 +86,7 @@ public:
 	void replace(u32 index, void* val, u32 size);
 	DataFlags getFlags(u32 index);
 	u32 getLen(u32 index);
+
+	void printStatus();
 };
 #endif // DATA_H

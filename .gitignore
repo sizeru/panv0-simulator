@@ -8,3 +8,4 @@ log.out
 .vscode
 compile_commands.json
 test
+out.log

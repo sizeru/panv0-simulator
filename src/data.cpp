@@ -24,8 +24,8 @@ u32 roundUpPow2(u32 val) {
  * @param dataLen The length of the instruction in bits
  * @param signExtend Should the data be sign extended?
  */
-Data::Data(const void* insnbits, u32 dataOffset, u32 dataLen)
-	: val(bfe(*reinterpret_cast<const u64*>(insnbits), dataOffset, dataLen)),
+Data::Data(const void* insnbits, u32 dataOffset, u32 dataLen) :
+		val(bfe(*reinterpret_cast<const u64*>(insnbits), dataOffset, dataLen)),
 		len(dataLen) {}
 
 DataFlags::DataFlags(u32 flags) : flags(flags) {}

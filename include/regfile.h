@@ -16,17 +16,29 @@ enum RegName {
 	REG__MAX
 };
 
+static const char* regNames[REG__MAX] = {"SP", "FP", "LR", "PC", "ANC"};
+
 struct Register {
 	u8 size;
 	u64 val;
 };
 
+// A regfile in PANv0 contains only the special purpose registers. Special
+// purpose registers are of a fixed size, based on the word size. Word size is
+// not guaranteed to be a power of 2. A regfile acts fundamentally identically
+// to an array of registers.
 struct Regfile {
 	Register regs[REG__MAX];
 
-	Register* operator&() { return this->regs; }
-	Register& operator[](u64 index) { return this->regs[index]; }
-	Regfile(panAddress entryPoint, panAddress returnPoint, panAddress topOfStack);
+	// Give a pointer to the registers
+	Register* operator&();
+	// Convenient way of accessing a register
+	Register& operator[](u64 index);
+	Regfile(u64 wordSize);
+	Regfile(
+		u64 wordSize, panAddress entryPoint, panAddress returnPoint,
+		panAddress topOfStack
+	);
 };
 
 #endif /* REGFILE_H */

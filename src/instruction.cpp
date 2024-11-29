@@ -56,19 +56,12 @@ void getOp(
 
 Instruction::Instruction() : op(OP__MAX), data(), len(0) {}
 
-Instruction::Instruction(u8* imem, Register& pc)
-	: op(parseOp(imem, pc)), data(parseData(imem, pc)), len(parseLen(imem, pc)) {}
+Instruction::Instruction(u8* memory, Register& pc) :
+	op(parseOp(memory, pc)), data(parseData(memory, pc)),
+	len(parseLen(memory, pc)) {}
 
-void Instruction::predictPC(Register& pc) {
-	switch (this->op) {
-	case OP_JUMP: pc.val += this->data.val; break;
-	case OP_JUMPABS:
-		// A more complex deref needs to happen here
-		pc.val += this->len;
-		break;
-	default: pc.val += this->len; break;
-	}
-	return;
+Instruction Instruction::fetch(u8* memory, Register& pc) {
+	return Instruction(memory, pc);
 }
 
 u16 Instruction::parseLen(const u8* imem, const Register& pc) {
@@ -139,121 +132,4 @@ Data Instruction::parseData(const u8* imem, const Register& pc) {
 	// }
 	// printf("\t[ %s %li ]\n", opNames[op], debugVal);
 	// return Instruction{op, data, instrLen};
-}
-
-// Returns true if the instruction was able to be run. False otherwise.
-// Consider this to be the ALU
-// TODO: This whole function assumes data fits within 8B
-bool Instruction::run(
-	Stack& exec, Stack& prep, Stack& spm, Regfile& regs, u8* mem, u16 wordSize
-) {
-	switch (this->op) {
-	case OP_PREP: {
-		// NOTE(Nate): Prep instructions will be classified as literals
-		return prep.push(
-			this->data,
-			DATA_IS_INTEGER | DATA_IS_LITERAL
-		); // This data length is guaranteed >0.
-	}
-	case OP_PUSHI:
-	case OP_PUSHS:
-	case OP_PUSHR: {
-		Data memVarLen = prep.get(0, 64);
-		DataFlags flags = memVarLen.val == 0 ? DATA_IS_LITERAL : DATA_IS_ADDRESS;
-		flags |= static_cast<DataFlag>(this->op << 1);
-		u32 dataLen;
-		if (flags.isAddress() && flags.getLocation() != DATA_IS_SPM) {
-			dataLen = memVarLen.val;
-		} else {
-			dataLen = this->data.len;
-		}
-
-		printf(
-			"\tStack::push() -> Pushing %u bit %s value of 0x%lx to stack\n",
-			dataLen,
-			flags.isAddress() ? "address" : "literal",
-			this->data.val
-		);
-		bool ok = exec.push(&this->data.val, dataLen, flags);
-		if (!ok) {
-			return false;
-		}
-		prep.clear();
-		return true;
-	}
-	case OP_ADD: {
-		u64 resLen = this->data.val * 8;
-		if (this->data.val == 0) {
-			resLen = exec.getLen(0);
-		} else {
-		}
-		Data a = exec.get(1, resLen, true);
-		Data b = exec.get(2, resLen, true);
-		Data shift = exec.get(3, resLen);
-
-		u64 result = a.val + (b.val << shift.val);
-		if (resLen < sizeof(void*) * 8) {
-			result &= (1UL << resLen) - 1;
-		}
-		printf(
-			"\t(%lub ADD) %lx = %lx + (%lx << %lx)\n",
-			resLen,
-			result,
-			a.val,
-			b.val,
-			shift.val
-		);
-		bool ok = exec.write(0, &result, resLen);
-		exec.clear();
-		return ok;
-	}
-	case OP_JUMPABS: {
-		Data condCode = this->data;
-		Data target = exec.get(0, wordSize); // where to jump to
-		Data op1 = exec.get(1);
-		Data op2 = exec.get(2);
-		// TODO: Add support for other cond codes
-		if (op1.val == op2.val) {
-			regs[REG_PC].val = target.val;
-		} else {
-			// predict this by default
-			// regs[REG_PC].val += this->len;
-		}
-		printf(
-			"\t(JUMP.ABS): cond: %lx target: %lx, op1: %li, op2: %lu\n",
-			condCode.val,
-			target.val,
-			op1.val,
-			op2.val
-		);
-		exec.clear();
-		return true;
-	}
-	case OP_JUMP: {
-		Data offset = this->data;
-		offset.resize(wordSize);
-		Data cond = exec.get(0);
-		Data op1 = exec.get(1);
-		Data op2 = exec.get(2);
-		if (op1.val == op2.val) {
-			// predict this by default
-			// regs[REG_PC].val += offset.val;
-		} else {
-			regs[REG_PC].val += this->len - offset.val;
-		}
-		printf(
-			"\tjumpOffset: %li, cond: %lx, op1: %li, op2: %lu\n",
-			offset.val,
-			cond.val,
-			op1.val,
-			op2.val
-		);
-		exec.clear();
-		return true;
-	}
-	default: // Unknown instruction
-		return false;
-		break;
-	}
-	return true;
 }

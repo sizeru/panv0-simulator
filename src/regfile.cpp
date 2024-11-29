@@ -6,13 +6,26 @@
 #include "regfile.h"
 #include "shorttypes.h"
 
-Regfile::Regfile(
-	panAddress entryPoint, panAddress returnPoint, panAddress topOfStack
-) {
+Register* Regfile::operator&() { return this->regs; }
+
+
+Register& Regfile::operator[](u64 index) {
+  // Simulate register size by always truncating contents
+  // this->regs[index].val &= (1UL << this->regs[index].size) - 1;
+  return this->regs[index];
+}
+
+Regfile::Regfile(u64 wordSize) {
 	for (int i = 0; i < REG__MAX; i++) {
-		this->regs[i].size = 12; // Size typically equal to size of memory
-		this->regs[i].val = 0;
+		this->regs[i].size = wordSize; // Size typically equal to size of memory
+		this->regs[i].val = 0xA;
 	}
+}
+
+Regfile::Regfile(
+	u64 wordSize, panAddress entryPoint, panAddress returnPoint,
+	panAddress topOfStack
+) : Regfile(wordSize) {
 	this->regs[REG_SP].val = topOfStack;
 	this->regs[REG_FP].val = topOfStack;
 	this->regs[REG_LR].val = returnPoint;

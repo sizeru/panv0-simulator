@@ -2,23 +2,24 @@
 #include "instruction.h"
 #include "panresult.h"
 #include "regfile.h"
+#include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <stdio.h>
 
 // A stack holds a deep copy of any data pushed into it.
 Stack::Stack(
 	u32 bufferSize, u8* memory, Stack* spmStack, Regfile& regfile, u16 wordSize
-)
-	: buffer(new u8[bufferSize]), capacity(bufferSize), memory(memory),
-		dataCap((bufferSize / 9) * 8), metaCap((bufferSize - dataCap) / 8),
-		dataSize(0), metaSize(0), metaBuffer((u64*)buffer),
-		dataBuffer(buffer + metaCap), spm(spmStack), regs(regfile),
-		wordSize(wordSize) {}
+) :
+		buffer(new u8[bufferSize]), capacity(bufferSize), memory(memory),
+		dataCap((bufferSize / 9) * 8), metaCap(bufferSize - dataCap), dataSize(0),
+		metaSize(0), metaBuffer((u64*)buffer), dataBuffer(buffer + metaCap),
+		spm(spmStack), regs(regfile), wordSize(wordSize) {}
 
 Stack::~Stack() { delete[] buffer; }
 
 // Push a value to the stack
-bool Stack::push(void* data, u32 len, DataFlags dataFlags) {
+bool Stack::push(const void* data, u32 len, DataFlags dataFlags) {
 	// Error checking
 	if (8 * this->metaSize + 8 > this->metaCap) {
 		return false;
@@ -75,7 +76,7 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 	void* dataBufferPtr = dataBuffer + dataBufferOffset;
 
 	if (size == 0) {
-		size = lenBits;
+		size = lenBytes * 8 + lenBits;
 	}
 
 	printf(
@@ -126,7 +127,7 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 		} else {
 			retrievedData.val = reg.val;
 		}
-		retrievedData.len = lenBits;
+		retrievedData.len = lenBytes * 8 + lenBits;
 		break;
 	}
 	case DATA_IS_SPM: {
@@ -144,7 +145,21 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 		printf(
 			"\tSPM%li -> SPM.ABS%i\n", spmIndex - this->regs[REG_ANC].val, spmIndex
 		);
-		retrievedData = spm->get(spmIndex, size);
+		if (flags.isAddress()) {
+			u64 wordSize = this->regs[REG_SP].size;
+			u64 addrVal = spm->get(spmIndex, wordSize).val;
+			void* addr = memory + addrVal;
+			memcpy(&retrievedData.val, addr, lenBytes);
+			retrievedData.len = size;
+			printf(
+				"\tRead (ABS) SPM[%u]: addr %lx (val: %lu)\n",
+				spmIndex,
+				addrVal,
+				retrievedData.val
+			);
+		} else {
+			retrievedData = spm->get(spmIndex, size);
+		}
 		break;
 	}
 	default: panExit(PAN_ERR_DATA_MISSING_LOCATION);
@@ -155,7 +170,7 @@ Data Stack::get(u32 index, u8 size, bool isSigned) {
 	return retrievedData;
 }
 
-// Writes to a destination register on the stack.
+// Writes to a destination indicated on the stack.
 bool Stack::write(u32 index, void* val, u32 storeLen) {
 	if (index >= this->metaSize) {
 		return true;
@@ -182,7 +197,7 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 		if (flags.isAddress()) {
 			// The size of an address is fixed on this machine.
 			// The length of the dereferenced data is variable
-			u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
+			u32 minBytes = std::min(lenBytes, storeBytes);
 			memcpy(&ptr, dataBufferPtr, this->wordSize / 8);
 			memcpy(memory + ptr, val, minBytes);
 			printf("\twrote %uB to int literal address: %lx\n", minBytes, ptr);
@@ -207,7 +222,9 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 		memcpy(&regIndex, dataBufferPtr, 1);
 		Register& reg = this->regs[regIndex];
 		if (flags.isAddress()) {
-			u32 minBytes = lenBytes < storeBytes ? lenBytes : storeBytes;
+			u32 minBytes = std::min(lenBytes, storeBytes);
+			// i64 offset = reg.val;
+			// signExtend(reinterpret_cast<u8*>(&offset), reg.size, 64);
 			memcpy(memory + reg.val, val, minBytes);
 			printf(
 				"\twrote %uB to reg[%lu] address: %lx\n", minBytes, regIndex, reg.val
@@ -215,41 +232,37 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 		} else {
 			// Writing to a register overwrites the whole register
 			reg.val = 0;
-			u32 minBytes =
-				(reg.size + 7) / 8 < storeBytes ? (reg.size + 7) / 8 : storeBytes;
+			u32 minBytes = std::min((u32)reg.size + 7 / 8, storeBytes);
 			memcpy(&reg.val, val, minBytes);
 			printf("\twrote %uB to reg[%lu]\n", minBytes, regIndex);
 		}
 		break;
 	}
 	case DATA_IS_SPM: {
-		// The spm stack stores the size of the data inside of it.
-		// NOTE(Nate): This is not forward-compatible
-		u32 spmIndex = 0;
+		// A value on the spm stack stores its size
+		u32 spmIndex = 0; // absolute index
 		memcpy(&spmIndex, dataBufferPtr, lenBytes);
 		spmIndex += this->regs[REG_ANC].val;
 		if (spmIndex >= spm->metaSize) {
-			// TODO: Add error checking here for out-of-order spm additions
+			assert(spmIndex == spm->metaSize); // Skipping not allowed
+			assert(!flags.isAddress());        // Cannot deref without an address
 			printf(
 				"\tSPM: pushing spm[%u] as '%s' onto spm stack\n",
 				spmIndex,
 				flags.isAddress() ? "address" : "literal"
 			);
-			spm->push(
-				val,
-				flags.isAddress() ? this->wordSize : storeLen,
-				DATA_IS_INTEGER | flags.isAddress()
-			);
+			if (storeLen == 0) { // Must be an address
+				u64 wordSize = this->regs[REG_SP].size;
+				storeLen = wordSize;
+			}
+			spm->push(val, storeLen, DATA_IS_INTEGER);
 		} else {
 			if (flags.isAddress()) {
 				Data spmData = spm->get(spmIndex, this->wordSize);
-				u32 minBytes = (spmData.len + 7) / 8 < storeBytes
-				                 ? (spmData.len + 7) / 8
-				                 : storeBytes;
-				memcpy(memory + spmData.val, val, minBytes);
+				memcpy(memory + spmData.val, val, storeBytes);
 				printf(
 					"\twrote %uB to spm[%u] address: %lx\n",
-					minBytes,
+					storeBytes,
 					spmIndex,
 					spmData.val
 				);
@@ -264,9 +277,7 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 		}
 		break;
 	}
-	default: {
-		panExit(PAN_ERR_DATA_MISSING_LOCATION);
-	}
+	default: panExit(PAN_ERR_DATA_MISSING_LOCATION);
 	}
 
 	printf("\twrote %ub value '%lx'.\n", storeLen, *(u64*)(val));
@@ -283,9 +294,9 @@ void Stack::replace(u32 index, void* val, u32 len) {
 	                                        // stack is intended
 	u32 lenBits = (metadata & ((1UL << 32) - 1)) >> 3;
 	u32 lenBytes = (lenBits + 7) / 8;
-	void* dataBufferPtr = reinterpret_cast<void*>(metadata >> 32);
+	void* dataBufferPtr = this->dataBuffer + (metadata >> 32);
 
-	u64 minLen = lenBytes < len ? lenBytes : len;
+	u64 minLen = std::min(lenBytes, len);
 	memcpy(dataBufferPtr, val, minLen);
 	// memset(reinterpret_cast<void*>((uintptr_t)dataBufferPtr + minLen), 0,
 	// lenBytes - minLen);
@@ -336,10 +347,14 @@ u32 Stack::getLen(u32 index) {
 		break;
 	}
 	case DATA_IS_SPM: {
-		// The spm stack stores its own information
-		u64 spmIndex = 0;
-		memcpy(&spmIndex, data, lenBytes);
-		len = this->spm->getLen(index);
+		if (flags.isAddress()) {
+			len = dataSize;
+		} else {
+			// The spm stack stores its own information
+			u64 spmIndex = 0;
+			memcpy(&spmIndex, data, lenBytes);
+			len = this->spm->getLen(index);
+		}
 		break;
 	}
 	case DATA_IS_REG: {
@@ -355,4 +370,12 @@ u32 Stack::getLen(u32 index) {
 	}
 
 	return len;
+}
+
+void Stack::printStatus() {
+	printf("Stack Info:\n");
+	for (int i = 0; i < this->metaSize; i += 1) {
+		Data d = this->get(i);
+		printf("\t%i: len: %u, val: %lx\n", i, d.len, d.val);
+	}
 }
