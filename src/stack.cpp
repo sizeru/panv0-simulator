@@ -222,7 +222,7 @@ bool Stack::write(u32 index, void* val, u32 storeLen) {
 		memcpy(&regIndex, dataBufferPtr, 1);
 		Register& reg = this->regs[regIndex];
 		if (flags.isAddress()) {
-			u32 minBytes = std::min(lenBytes, storeBytes);
+			u32 minBytes = std::min(lenBytes, storeBytes); // TODO: Why min?
 			// i64 offset = reg.val;
 			// signExtend(reinterpret_cast<u8*>(&offset), reg.size, 64);
 			memcpy(memory + reg.val, val, minBytes);
