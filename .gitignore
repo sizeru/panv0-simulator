@@ -9,3 +9,5 @@ log.out
 compile_commands.json
 test
 out.log
+
+scripts/sum*
